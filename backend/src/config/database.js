@@ -110,6 +110,8 @@ export const memoryStore = {
 <h3>Annual Grand Crowning in Jaipur</h3>
 <p>Each season culminates in a world-class 3-day extravaganza hosted in Jaipur, Rajasthan, featuring international runway shows, celebrity guests, state and national crowning ceremonies, and industry networking.</p>`,
       featured_image: "https://images.unsplash.com/photo-1511578314322-379afb476865?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "What is FSIA? | Forever Star India Awards & Recognition Platform",
+      meta_description: "Discover Forever Star India Awards (FSIA) — India's premier talent recognition platform celebrating achievers in business, fashion, empowerment, and leadership.",
       status: "published",
       is_featured: 1,
       category_id: 1,
@@ -152,6 +154,8 @@ export const memoryStore = {
 <h3>Long-Term Digital Footprint</h3>
 <p>Every participant receives high-resolution editorial photoshoots, video features, and dedicated profile indexing across Google Search and Google News via the Greenlight portal.</p>`,
       featured_image: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "FSIA Season 5 Jaipur Grand Finale | Forever Star India Awards",
+      meta_description: "Jaipur prepares for the 3-day FSIA Season 5 grand finale uniting 400+ award winners, fashion icons, and visionary entrepreneurs from December 19-21.",
       status: "published",
       is_featured: 1,
       category_id: 1,
@@ -185,6 +189,8 @@ export const memoryStore = {
 
 <blockquote>"When you recognize a woman leader, you inspire an entire generation of young girls to dare to dream and build."</blockquote>`,
       featured_image: "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "The Real Super Woman Awards | Honoring Women Leaders Pan-India",
+      meta_description: "FSIA's flagship initiative shines a light on grassroots innovators, educators, doctors, and business leaders across 28 Indian states.",
       status: "published",
       is_featured: 1,
       category_id: 2,

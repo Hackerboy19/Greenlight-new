@@ -9,6 +9,8 @@ export interface Article {
   excerpt: string;
   content: string;
   featured_image: string;
+  meta_title?: string;
+  meta_description?: string;
   category_id: number;
   category_name: string;
   category_slug: string;

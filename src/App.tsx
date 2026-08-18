@@ -808,6 +808,7 @@ export default function App() {
                         <th className="py-3.5 px-4">Title & Slug</th>
                         <th className="py-3.5 px-4">Category</th>
                         <th className="py-3.5 px-4">Author</th>
+                        <th className="py-3.5 px-4">SEO Tags</th>
                         <th className="py-3.5 px-4">Infobox Fields</th>
                         <th className="py-3.5 px-4">Status</th>
                         <th className="py-3.5 px-4 text-right">Actions</th>
@@ -831,6 +832,18 @@ export default function App() {
                           </td>
                           <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
                             {art.author_name}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {art.meta_title ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
+                                <Search className="w-3 h-3" />
+                                <span>Optimized</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]">
+                                Default
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4">
                             <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold">

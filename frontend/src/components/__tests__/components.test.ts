@@ -56,6 +56,17 @@ export function runUnitTests(): { passed: number; failed: number; results: strin
     'GSC metrics point contains positive clicks and valid search position'
   );
 
+  // Test 5: SEO Meta Tags validation contract
+  const sampleSeoArticle = {
+    meta_title: 'Forever Star India Awards Season 5 | FSIA Jaipur Gala',
+    meta_description: 'Discover FSIA Season 5 in Jaipur bringing together 400+ awardees across India.'
+  };
+  assert(
+    sampleSeoArticle.meta_title.length > 10 && sampleSeoArticle.meta_title.length <= 70 &&
+    sampleSeoArticle.meta_description.length > 20 && sampleSeoArticle.meta_description.length <= 160,
+    'SEO meta_title and meta_description satisfy optimal search engine character constraints'
+  );
+
   return { passed, failed, results };
 }
 

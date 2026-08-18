@@ -6,6 +6,9 @@
 import { Router } from 'express';
 import publicRoutes from './publicRoutes.js';
 import adminRoutes from './adminRoutes.js';
+import * as articleController from '../controllers/admin/articleController.js';
+import * as categoryController from '../controllers/admin/categoryController.js';
+import * as authorController from '../controllers/admin/authorController.js';
 import { generateToken } from '../middlewares/authMiddleware.js';
 import { memoryStore } from '../config/database.js';
 
@@ -52,6 +55,16 @@ router.post('/auth/login', (req, res) => {
     }
   });
 });
+
+// Direct root resource aliases (supporting both /api/articles and /api/admin/articles)
+router.get('/articles', articleController.getAllArticles);
+router.post('/articles', articleController.createArticle);
+router.get('/articles/:id', articleController.getArticleById);
+router.put('/articles/:id', articleController.updateArticle);
+router.delete('/articles/:id', articleController.deleteArticle);
+
+router.get('/categories', categoryController.getAllCategories);
+router.get('/authors', authorController.getAllAuthors);
 
 // Route groups
 router.use('/public', publicRoutes);

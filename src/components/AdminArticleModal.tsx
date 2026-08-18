@@ -20,7 +20,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
-import { InfoboxBuilder } from '../../frontend/src/components/admin/InfoboxBuilder';
+import { InfoboxBuilder } from './admin/InfoboxBuilder';
 
 export interface AdminArticleModalProps {
   isOpen: boolean;
@@ -36,8 +36,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   onClose,
   onSave,
   article,
-  categories,
-  authors
+  categories = [],
+  authors = []
 }) => {
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
@@ -54,6 +54,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const defaultCatId = categories[0]?.id || 1;
+    const defaultAuthId = authors[0]?.id || 1;
+
     if (article) {
       setTitle(article.title || '');
       setExcerpt(article.excerpt || '');
@@ -61,8 +64,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setFeaturedImage(article.featured_image || '');
       setMetaTitle(article.meta_title || article.title || '');
       setMetaDescription(article.meta_description || article.excerpt || '');
-      setCategoryId(article.category_id || categories[0]?.id || 1);
-      setAuthorId(article.author_id || authors[0]?.id || 1);
+      setCategoryId(article.category_id || defaultCatId);
+      setAuthorId(article.author_id || defaultAuthId);
       setStatus(article.status || 'published');
       setIsFeatured(Boolean(article.is_featured));
       setInfobox(article.infobox || []);
@@ -73,8 +76,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setFeaturedImage('https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1200&auto=format&fit=crop&q=80');
       setMetaTitle('');
       setMetaDescription('');
-      setCategoryId(categories[0]?.id || 1);
-      setAuthorId(authors[0]?.id || 1);
+      setCategoryId(defaultCatId);
+      setAuthorId(defaultAuthId);
       setStatus('published');
       setIsFeatured(false);
       setInfobox([
@@ -145,8 +148,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
         featured_image: featuredImage,
         meta_title: metaTitle.trim() || title,
         meta_description: metaDescription.trim() || excerpt,
-        category_id: Number(categoryId),
-        author_id: Number(authorId),
+        category_id: Number(categoryId) || 1,
+        author_id: Number(authorId) || 1,
         status,
         is_featured: isFeatured ? 1 : 0,
         infobox
@@ -219,12 +222,16 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               <select
                 id="article-category-select"
                 value={categoryId}
-                onChange={(e) => setCategoryId(Number(e.target.value))}
+                onChange={(e) => setCategoryId(Number(e.target.value) || 1)}
                 className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
               >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {categories.length > 0 ? (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))
+                ) : (
+                  <option value={1}>General (Editorial)</option>
+                )}
               </select>
             </div>
 
@@ -235,12 +242,16 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               <select
                 id="article-author-select"
                 value={authorId}
-                onChange={(e) => setAuthorId(Number(e.target.value))}
+                onChange={(e) => setAuthorId(Number(e.target.value) || 1)}
                 className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
               >
-                {authors.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
-                ))}
+                {authors.length > 0 ? (
+                  authors.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                  ))
+                ) : (
+                  <option value={1}>Editorial Staff (Editor)</option>
+                )}
               </select>
             </div>
 

@@ -118,8 +118,16 @@ export async function createArticle(req, res, next) {
       slug = `${baseSlug}-${counter++}`;
     }
 
-    const category = memoryStore.categories.find(c => c.id === parseInt(category_id, 10)) || memoryStore.categories[0];
-    const author = memoryStore.authors.find(au => au.id === parseInt(author_id, 10)) || memoryStore.authors[0];
+    const parsedCatId = parseInt(category_id, 10);
+    const parsedAuthId = parseInt(author_id, 10);
+    
+    const category = (!isNaN(parsedCatId) ? memoryStore.categories.find(c => c.id === parsedCatId) : null) 
+      || memoryStore.categories[0] 
+      || { id: 1, name: 'General', slug: 'general' };
+
+    const author = (!isNaN(parsedAuthId) ? memoryStore.authors.find(au => au.id === parsedAuthId) : null) 
+      || memoryStore.authors[0] 
+      || { id: 1, name: 'Greenlight Editorial Desk', role: 'editor', avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' };
 
     const newArticle = {
       id: Date.now(),
@@ -199,12 +207,15 @@ export async function updateArticle(req, res, next) {
     let categoryName = existing.category_name;
     let categorySlug = existing.category_slug;
 
-    if (category_id) {
-      const foundCat = memoryStore.categories.find(c => c.id === parseInt(category_id, 10));
-      if (foundCat) {
-        category = foundCat.id;
-        categoryName = foundCat.name;
-        categorySlug = foundCat.slug;
+    if (category_id !== undefined && category_id !== null && category_id !== '') {
+      const parsedCatId = parseInt(category_id, 10);
+      if (!isNaN(parsedCatId)) {
+        const foundCat = memoryStore.categories.find(c => c.id === parsedCatId);
+        if (foundCat) {
+          category = foundCat.id;
+          categoryName = foundCat.name;
+          categorySlug = foundCat.slug;
+        }
       }
     }
 
@@ -212,12 +223,15 @@ export async function updateArticle(req, res, next) {
     let authorName = existing.author_name;
     let authorAvatar = existing.author_avatar;
 
-    if (author_id) {
-      const foundAuth = memoryStore.authors.find(au => au.id === parseInt(author_id, 10));
-      if (foundAuth) {
-        authorId = foundAuth.id;
-        authorName = foundAuth.name;
-        authorAvatar = foundAuth.avatar_url;
+    if (author_id !== undefined && author_id !== null && author_id !== '') {
+      const parsedAuthId = parseInt(author_id, 10);
+      if (!isNaN(parsedAuthId)) {
+        const foundAuth = memoryStore.authors.find(au => au.id === parsedAuthId);
+        if (foundAuth) {
+          authorId = foundAuth.id;
+          authorName = foundAuth.name;
+          authorAvatar = foundAuth.avatar_url;
+        }
       }
     }
 

@@ -221,6 +221,8 @@ export const memoryStore = {
 <h3>Auditions and Training Modules</h3>
 <p>Contestants undergo curated virtual and offline mentorship programs with industry veterans, voice coaches, and professional choreographers before taking the grand runway stage in Jaipur.</p>`,
       featured_image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "Forever Miss & Mrs India 2026 Pageant | FSIA Grand Crowning",
+      meta_description: "Auditions open for Forever Miss India and Forever Mrs India 2026 with state grooming, celebrity mentors, and Jaipur national finals.",
       status: "published",
       is_featured: 0,
       category_id: 3,
@@ -251,6 +253,8 @@ export const memoryStore = {
 <h3>Digital Public Infrastructure as a Growth Catalyst</h3>
 <p>The combination of unified payments (UPI), hyper-local logistics aggregators, and targeted social commerce has lowered customer acquisition costs while boosting repeat order frequency.</p>`,
       featured_image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "India's D2C Brand Revolution | Tier-2 & Tier-3 Consumer Scale",
+      meta_description: "Explore how homegrown Indian D2C consumer brands leverage UPI rails and hyper-local fulfillment to achieve multi-million dollar annual scale.",
       status: "published",
       is_featured: 0,
       category_id: 4,
@@ -277,6 +281,8 @@ export const memoryStore = {
       content: `<h2>The Intersection of Heritage and Global Events</h2>
 <p>Jaipur, a UNESCO World Heritage City, has evolved into India's premier destination for high-profile award ceremonies, literary festivals, and international fashion galas. Modern infrastructure such as the JECC combined with 5-star heritage hotels provides the ultimate backdrop for FSIA's annual spectacles.</p>`,
       featured_image: "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "Jaipur's Modern Renaissance | Arts & Awards Capital of India",
+      meta_description: "How Jaipur transformed into North India's cultural epicenter hosting Forever Star India Awards and world-class heritage conclaves.",
       status: "published",
       is_featured: 0,
       category_id: 5,
@@ -303,6 +309,8 @@ export const memoryStore = {
       excerpt: "Next-generation propulsion systems and heavy launch vehicles power South Asia's aerospace boom with record orbital deployments.",
       content: `<h2>The Rise of Private Aerospace in South Asia</h2><p>India's commercial space ecosystem has witnessed an unprecedented inflection point. Over the past twelve months, private aerospace startups have successfully launched eight orbital payloads and closed major international satellite deployment contracts.</p><h3>Key Growth Drivers</h3><p>Government deregulation combined with indigenous cryogenic upper-stage engineering has reduced launch costs by over 42% compared to traditional legacy providers.</p><blockquote>"The integration of modular micro-satellites and autonomous station keeping is reshaping Earth observation paradigms across maritime and agriculture sectors."</blockquote>`,
       featured_image: "https://images.unsplash.com/photo-1517976487508-54b9d0dc6b29?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "India Space Tech Sector Valuation $44B | Commercial Orbiters",
+      meta_description: "Indian private aerospace companies achieve $44B market valuation with breakthrough propulsion tech and satellite constellation launches.",
       status: "published",
       is_featured: 0,
       category_id: 6,
@@ -320,6 +328,36 @@ export const memoryStore = {
         { section: "Overview", field_key: "Valuation", field_value: "$44.2 Billion USD" },
         { section: "Operations", field_key: "Active Orbiters", field_value: "48 Operational Satellites" },
         { section: "Financials", field_key: "Primary Regulator", field_value: "IN-SPACe / ISRO" }
+      ]
+    },
+    {
+      id: 8,
+      title: "Forever Super Hero Awards 2026: Honoring Men of Courage, Vision & Social Leadership",
+      slug: "forever-super-hero-awards-2026-honoring-men-social-leadership",
+      excerpt: "Nominations open for FSIA's Forever Super Hero Awards celebrating male pioneers in social welfare, technology, sports, and entrepreneurship.",
+      content: `<h2>Recognizing Real Heroes Working Behind the Scenes</h2>
+<p>The <strong>Forever Super Hero Awards</strong> is an esteemed vertical under the Forever Star India Awards banner created to honor male achievers who demonstrate extraordinary leadership, community impact, and moral conviction.</p>
+<h3>National Selection Criteria</h3>
+<p>A distinguished jury panel evaluates candidates across grassroots innovation, ethical leadership, youth mentorship, and philanthropy.</p>`,
+      featured_image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=1200&auto=format&fit=crop&q=80",
+      meta_title: "Forever Super Hero Awards 2026 | FSIA National Nominations",
+      meta_description: "Discover the Forever Super Hero Awards 2026 celebrating men of courage, innovation, and grassroots social leadership across India.",
+      status: "published",
+      is_featured: 0,
+      category_id: 1,
+      category_name: "FSIA Awards",
+      category_slug: "fsia-awards",
+      author_id: 1,
+      author_name: "Rajesh Sharma",
+      author_avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80",
+      views_count: 9840,
+      reading_time: 3,
+      published_at: new Date(Date.now() - 28 * 3600000).toISOString(),
+      created_at: new Date(Date.now() - 40 * 3600000).toISOString(),
+      infobox: [
+        { section: "Initiative", field_key: "Award Domain", field_value: "Forever Super Hero Awards" },
+        { section: "Eligibility", field_key: "Nominees", field_value: "Entrepreneurs, Innovators, Social Workers" },
+        { section: "Gala Ceremony", field_key: "Annual Stage", field_value: "Jaipur National Conclave" }
       ]
     }
   ],

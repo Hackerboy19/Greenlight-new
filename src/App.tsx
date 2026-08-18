@@ -34,15 +34,25 @@ import {
   Flame
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { VoiceSearchBar } from '../frontend/src/components/public/VoiceSearchBar';
-import { HeroFeatured } from '../frontend/src/components/public/HeroFeatured';
-import { CategoryRow } from '../frontend/src/components/public/CategoryRow';
-import { TableOfContents } from '../frontend/src/components/public/TableOfContents';
-import { WikiInfobox } from '../frontend/src/components/public/WikiInfobox';
-import { AnalyticsCharts } from '../frontend/src/components/admin/AnalyticsCharts';
-import { RankDropsTable } from '../frontend/src/components/admin/RankDropsTable';
+import { VoiceSearchBar } from './components/public/VoiceSearchBar';
+import { HeroFeatured } from './components/public/HeroFeatured';
+import { CategoryRow } from './components/public/CategoryRow';
+import { TableOfContents } from './components/public/TableOfContents';
+import { WikiInfobox } from './components/public/WikiInfobox';
+import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
+import { RankDropsTable } from './components/admin/RankDropsTable';
 import { AdminArticleModal } from './components/AdminArticleModal';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
+
+// Helper for safe JSON response parsing that prevents SyntaxError on HTML error pages
+async function parseResponseJson(res: Response) {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return await res.json();
+  }
+  const text = await res.text();
+  return { success: res.ok, message: text };
+}
 
 export default function App() {
   // App navigation state
@@ -76,21 +86,23 @@ export default function App() {
       // Fetch Homepage Data
       const hpRes = await fetch('/api/public/homepage');
       if (hpRes.ok) {
-        const hpJson = await hpRes.json();
-        const allFetched: Article[] = [
-          ...(hpJson.data.featured || []),
-          ...(hpJson.data.trending || []),
-          ...(hpJson.data.categoryRows?.flatMap((r: any) => r.articles) || [])
-        ];
-        // Deduplicate
-        const unique = Array.from(new Map(allFetched.map(a => [a.id, a])).values());
-        setArticles(unique);
+        const hpJson = await parseResponseJson(hpRes);
+        if (hpJson && hpJson.data) {
+          const allFetched: Article[] = [
+            ...(hpJson.data.featured || []),
+            ...(hpJson.data.trending || []),
+            ...(hpJson.data.categoryRows?.flatMap((r: any) => r.articles) || [])
+          ];
+          // Deduplicate
+          const unique = Array.from(new Map(allFetched.map(a => [a.id, a])).values());
+          setArticles(unique);
+        }
       }
 
       // Fetch Categories
       const catRes = await fetch('/api/public/categories');
       if (catRes.ok) {
-        const catJson = await catRes.json();
+        const catJson = await parseResponseJson(catRes);
         setCategories(catJson.data || []);
       }
 
@@ -99,7 +111,7 @@ export default function App() {
         headers: { 'x-test-role': 'admin' }
       });
       if (gscRes.ok) {
-        const gscJson = await gscRes.json();
+        const gscJson = await parseResponseJson(gscRes);
         setGscData(gscJson.timeSeries || []);
       }
 
@@ -108,7 +120,7 @@ export default function App() {
         headers: { 'x-test-role': 'admin' }
       });
       if (dropsRes.ok) {
-        const dropsJson = await dropsRes.json();
+        const dropsJson = await parseResponseJson(dropsRes);
         setGscRankDrops(dropsJson.data || []);
       }
 
@@ -117,7 +129,7 @@ export default function App() {
         headers: { 'x-test-role': 'admin' }
       });
       if (authRes.ok) {
-        const authJson = await authRes.json();
+        const authJson = await parseResponseJson(authRes);
         setAuthors(authJson.data || []);
       }
     } catch (err) {
@@ -140,8 +152,13 @@ export default function App() {
     try {
       const res = await fetch(`/api/public/articles/${slug}`);
       if (res.ok) {
-        const json = await res.json();
-        setSelectedArticle(json.data);
+        const json = await parseResponseJson(res);
+        if (json && json.data) {
+          setSelectedArticle(json.data);
+        } else {
+          const local = articles.find(a => a.slug === slug);
+          if (local) setSelectedArticle(local);
+        }
       } else {
         const local = articles.find(a => a.slug === slug);
         if (local) setSelectedArticle(local);
@@ -179,8 +196,8 @@ export default function App() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Failed to save article');
+      const err = await parseResponseJson(res);
+      throw new Error(err.message || err.error || 'Failed to save article');
     }
 
     await loadData();

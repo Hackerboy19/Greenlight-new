@@ -1,0 +1,6 @@
+{
+  "name": "Greenlight News & CMS Platform",
+  "description": "Production-grade news publication engine and admin CMS with Google Search Console archiving, Wiki infobox builder, and high-performance search for greenlight.fsia.in",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

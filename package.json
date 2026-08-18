@@ -9,7 +9,10 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:migrate": "tsx backend/scripts/migrate.ts up",
+    "db:migrate:status": "tsx backend/scripts/migrate.ts status",
+    "db:seed": "tsx backend/scripts/seed.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

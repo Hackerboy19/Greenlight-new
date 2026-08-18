@@ -25,29 +25,19 @@ const dbConfig = {
   charset: 'utf8mb4'
 };
 
-let pool = null;
+export let pool = mysql.createPool(dbConfig);
 let isDbConnected = false;
 
-// Initialize MySQL pool safely
-try {
-  if (process.env.DB_HOST && process.env.DB_NAME) {
-    pool = mysql.createPool(dbConfig);
-    // Ping to verify connection
-    pool.getConnection()
-      .then((conn) => {
-        isDbConnected = true;
-        console.log(`[Database] Successfully connected to MySQL database: ${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`);
-        conn.release();
-      })
-      .catch((err) => {
-        console.warn(`[Database] Direct MySQL connection unreachable (${err.message}). Activating in-memory store for continuous runtime.`);
-      });
-  } else {
-    console.info('[Database] No explicit DB_HOST configured. Running with resilient embedded data store.');
-  }
-} catch (error) {
-  console.warn('[Database] Pool initialization error:', error.message);
-}
+// Ping to verify connection
+pool.getConnection()
+  .then((conn) => {
+    isDbConnected = true;
+    console.log(`[Database] Successfully connected to MySQL database: ${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`);
+    conn.release();
+  })
+  .catch((err) => {
+    console.warn(`[Database] Direct MySQL connection unreachable (${err.message}). Embedded in-memory store remains available.`);
+  });
 
 /**
  * Execute a parameterized SQL query

@@ -4,13 +4,12 @@ import { hashPassword } from '../src/modules/auth/auth.service.js';
 import { slugify } from '../src/lib/slugify.js';
 
 const CATEGORIES = [
-  { name: 'Top Stories', sortOrder: 10, icon: 'newspaper', colorHex: '#1a73e8' },
-  { name: 'India', sortOrder: 20, icon: 'map-pin', colorHex: '#188038' },
-  { name: 'World', sortOrder: 30, icon: 'globe', colorHex: '#1967d2' },
-  { name: 'Business', sortOrder: 40, icon: 'trending-up', colorHex: '#b06000' },
-  { name: 'Technology', sortOrder: 50, icon: 'cpu', colorHex: '#8430ce' },
-  { name: 'Sports', sortOrder: 60, icon: 'trophy', colorHex: '#c5221f' },
-  { name: 'Health', sortOrder: 70, icon: 'heart-pulse', colorHex: '#137333' },
+  { name: 'FSIA Awards', sortOrder: 10, icon: 'trophy', colorHex: '#059669' },
+  { name: 'Business & Leadership', sortOrder: 20, icon: 'trending-up', colorHex: '#1a73e8' },
+  { name: 'Entertainment & Fashion', sortOrder: 30, icon: 'sparkles', colorHex: '#8430ce' },
+  { name: 'Startups & Innovation', sortOrder: 40, icon: 'cpu', colorHex: '#b06000' },
+  { name: 'Travel & Heritage', sortOrder: 50, icon: 'map-pin', colorHex: '#c5221f' },
+  { name: 'Technology & AI', sortOrder: 60, icon: 'globe', colorHex: '#1967d2' },
 ];
 
 async function seed() {

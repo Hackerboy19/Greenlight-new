@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import app from './backend/src/app.js';
 import { initGscCronJob } from './backend/src/cron/gscArchiverJob.js';
+import { syncGreenlightLive } from './backend/src/services/greenlightSyncService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +19,13 @@ async function startServer() {
 
   // Initialize Search Console Archiving Cron (02:00 UTC)
   initGscCronJob();
+
+  // Run live sync from https://greenlight.fsia.in/ in the background on boot
+  syncGreenlightLive().then((res) => {
+    console.log(`[Greenlight Boot] Initial sync completed: ${res.articlesCount || 0} articles loaded.`);
+  }).catch((err) => {
+    console.warn('[Greenlight Boot] Initial live sync fallback to default dataset:', err.message);
+  });
 
   // In development, hook up Vite middleware
   if (process.env.NODE_ENV !== 'production') {

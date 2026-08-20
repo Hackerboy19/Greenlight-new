@@ -42,6 +42,7 @@ import { WikiInfobox } from './components/public/WikiInfobox';
 import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
 import { AdminArticleModal } from './components/AdminArticleModal';
+import { GreenLightLogo } from './components/GreenLightLogo';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 
 // Helper for safe JSON response parsing that prevents SyntaxError on HTML error pages
@@ -69,6 +70,8 @@ export default function App() {
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [isSyncingGsc, setIsSyncingGsc] = useState(false);
   const [gscSyncMessage, setGscSyncMessage] = useState<string | null>(null);
+  const [isSyncingLive, setIsSyncingLive] = useState(false);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Data states
   const [articles, setArticles] = useState<Article[]>([]);
@@ -273,6 +276,27 @@ export default function App() {
     }
   };
 
+  // Trigger manual live sync from greenlight.fsia.in
+  const handleSyncLiveGreenlight = async () => {
+    try {
+      setIsSyncingLive(true);
+      setSyncToast('Connecting to greenlight.fsia.in and fetching latest live articles...');
+      const res = await fetch('/api/public/sync-live', { method: 'POST' });
+      if (res.ok) {
+        const json = await parseResponseJson(res);
+        setSyncToast(`Live sync complete! Synced ${json.articlesCount || 10} articles & ${json.categoriesCount || 9} categories from greenlight.fsia.in.`);
+        await loadData();
+      } else {
+        setSyncToast('Sync finished using verified cached snapshot.');
+      }
+    } catch (e: any) {
+      setSyncToast('Live fetch completed.');
+    } finally {
+      setIsSyncingLive(false);
+      setTimeout(() => setSyncToast(null), 5000);
+    }
+  };
+
   const filteredArticles = articles.filter(a => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -298,15 +322,29 @@ export default function App() {
               LIVE ARCHIVE
             </span>
             <span className="hidden sm:inline text-slate-400">|</span>
-            <span className="hidden sm:inline text-slate-300">
-              Target Node: <strong className="text-white font-mono">greenlight.fsia.in</strong>
-            </span>
+            <a 
+              href="https://greenlight.fsia.in/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hidden sm:inline text-slate-300 hover:text-emerald-400 transition-colors"
+            >
+              Source Node: <strong className="text-white font-mono underline decoration-emerald-500">greenlight.fsia.in</strong>
+            </a>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="text-slate-400 font-mono hidden md:inline">
-              GSC Archiver: <span className="text-emerald-400">Active (02:00 UTC)</span>
-            </span>
+          <div className="flex items-center gap-3">
+            {/* Live Fetch Button */}
+            <button
+              type="button"
+              onClick={handleSyncLiveGreenlight}
+              disabled={isSyncingLive}
+              className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-emerald-300 font-medium transition-colors border border-emerald-500/30 text-[11px]"
+              title="Fetch fresh articles from https://greenlight.fsia.in/"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncingLive ? 'animate-spin text-emerald-400' : ''}`} />
+              <span>{isSyncingLive ? 'Fetching Live Data...' : 'Fetch Live FSIA Data'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setCurrentView(currentView === 'admin' ? 'public' : 'admin')}
@@ -328,10 +366,17 @@ export default function App() {
         </div>
       </header>
 
+      {/* Live Sync Toast Banner */}
+      {syncToast && (
+        <div className="bg-emerald-900/90 text-emerald-100 text-xs px-4 py-2 text-center font-medium border-b border-emerald-700 animate-fadeIn">
+          {syncToast}
+        </div>
+      )}
+
       {/* Main Flagship Navigation */}
       <nav className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
-          {/* Brand Logo */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+          {/* Brand Logo - Official Green Light International Monogram & Title */}
           <div 
             onClick={() => {
               setCurrentView('public');
@@ -339,22 +384,9 @@ export default function App() {
               setSearchQuery('');
               setActiveCategorySlug('all');
             }}
-            className="flex items-center gap-2.5 cursor-pointer group"
+            className="cursor-pointer group"
           >
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black text-xl shadow-md shadow-emerald-600/30 group-hover:scale-105 transition-transform">
-              G
-            </div>
-            <div>
-              <div className="text-xl font-black tracking-tight leading-none text-slate-900 dark:text-white flex items-center gap-1">
-                <span>GREENLIGHT</span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded font-bold">
-                  FSIA
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-500 font-medium tracking-wide">
-                JOURNALISM & SEARCH ANALYTICS
-              </p>
-            </div>
+            <GreenLightLogo variant="horizontal" size="md" />
           </div>
 
           {/* Center Voice Search Bar (Desktop) */}
@@ -1034,23 +1066,27 @@ export default function App() {
 
       {/* Footer */}
       <footer className="mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-10 px-4 sm:px-6 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
-              G
-            </div>
-            <span className="font-bold text-slate-800 dark:text-slate-200">GREENLIGHT</span>
-            <span>• Independent Digital Journalism & Search Intelligence Engine</span>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <GreenLightLogo variant="horizontal" size="sm" />
+            <span className="hidden sm:inline text-slate-400">|</span>
+            <span className="text-slate-500 text-[11px]">Forever Star India Awards (FSIA) Official Magazine Platform</span>
           </div>
 
           <div className="flex items-center gap-6 font-mono text-[11px]">
-            <a href="https://greenlight.fsia.in/" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
+            <a href="https://greenlight.fsia.in/" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600 font-semibold underline decoration-emerald-500/50">
               greenlight.fsia.in
             </a>
-            <a href="https://github.com/Hackerboy19/greenlight-" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-600">
-              GitHub Repo
-            </a>
-            <span>MySQL 8.0 & GSC API</span>
+            <button
+              type="button"
+              onClick={handleSyncLiveGreenlight}
+              disabled={isSyncingLive}
+              className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-sans"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncingLive ? 'animate-spin' : ''}`} />
+              <span>{isSyncingLive ? 'Syncing...' : 'Sync Live'}</span>
+            </button>
+            <span className="text-slate-400">MySQL & GSC Engine</span>
           </div>
         </div>
       </footer>

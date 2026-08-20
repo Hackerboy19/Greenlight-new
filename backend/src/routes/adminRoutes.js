@@ -54,4 +54,17 @@ router.get('/gsc/rank-drops', authorizeRole('editor'), gscController.getRankDrop
 router.get('/gsc/status', authorizeRole('admin'), gscController.getSchedulerStatus);
 router.post('/gsc/sync', authorizeRole('admin'), gscController.triggerSync);
 
+/* ==========================================================================
+   Live Greenlight.fsia.in Data Synchronizer
+   ========================================================================== */
+router.post('/greenlight/sync', authorizeRole('author'), async (req, res) => {
+  try {
+    const { syncGreenlightLive } = await import('../services/greenlightSyncService.js');
+    const result = await syncGreenlightLive();
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

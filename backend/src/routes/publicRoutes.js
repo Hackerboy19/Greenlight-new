@@ -34,4 +34,26 @@ router.get('/categories', (req, res) => {
 /* Full-text & Voice Search Endpoint */
 router.get('/search', searchController.searchArticles);
 
+/* Live Crawler on-demand sync from greenlight.fsia.in */
+router.post('/sync-live', async (req, res) => {
+  try {
+    const { syncGreenlightLive } = await import('../services/greenlightSyncService.js');
+    const result = await syncGreenlightLive();
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* Live articles direct fetch */
+router.get('/greenlight/status', (req, res) => {
+  return res.status(200).json({
+    status: 'connected',
+    target: 'https://greenlight.fsia.in/',
+    articles_count: memoryStore.articles.length,
+    categories_count: memoryStore.categories.length,
+    timestamp: new Date().toISOString()
+  });
+});
+
 export default router;

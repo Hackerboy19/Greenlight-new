@@ -44,6 +44,7 @@ import { RankDropsTable } from './components/admin/RankDropsTable';
 import { AdminArticleModal } from './components/AdminArticleModal';
 import { GreenLightLogo } from './components/GreenLightLogo';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
+import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
 
 // Helper for safe JSON response parsing that prevents SyntaxError on HTML error pages
 async function parseResponseJson(res: Response) {
@@ -73,13 +74,13 @@ export default function App() {
   const [isSyncingLive, setIsSyncingLive] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  // Data states
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [authors, setAuthors] = useState<Author[]>([]);
+  // Data states initialized with instant high-quality defaults to prevent blank canvas
+  const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
+  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const [authors, setAuthors] = useState<Author[]>(INITIAL_AUTHORS);
   const [gscData, setGscData] = useState<GscPerformancePoint[]>([]);
   const [gscRankDrops, setGscRankDrops] = useState<GscRankDrop[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
   // Fetch initial public & admin datasets
@@ -98,7 +99,9 @@ export default function App() {
           ];
           // Deduplicate
           const unique = Array.from(new Map(allFetched.map(a => [a.id, a])).values());
-          setArticles(unique);
+          if (unique.length > 0) {
+            setArticles(unique);
+          }
         }
       }
 
@@ -106,7 +109,9 @@ export default function App() {
       const catRes = await fetch('/api/public/categories');
       if (catRes.ok) {
         const catJson = await parseResponseJson(catRes);
-        setCategories(catJson.data || []);
+        if (catJson && Array.isArray(catJson.data) && catJson.data.length > 0) {
+          setCategories(catJson.data);
+        }
       }
 
       // Fetch GSC Analytics
@@ -115,7 +120,9 @@ export default function App() {
       });
       if (gscRes.ok) {
         const gscJson = await parseResponseJson(gscRes);
-        setGscData(gscJson.timeSeries || []);
+        if (gscJson?.timeSeries) {
+          setGscData(gscJson.timeSeries);
+        }
       }
 
       // Fetch GSC Rank Drops
@@ -124,7 +131,9 @@ export default function App() {
       });
       if (dropsRes.ok) {
         const dropsJson = await parseResponseJson(dropsRes);
-        setGscRankDrops(dropsJson.data || []);
+        if (dropsJson?.data) {
+          setGscRankDrops(dropsJson.data);
+        }
       }
 
       // Fetch Authors
@@ -133,10 +142,12 @@ export default function App() {
       });
       if (authRes.ok) {
         const authJson = await parseResponseJson(authRes);
-        setAuthors(authJson.data || []);
+        if (authJson?.data) {
+          setAuthors(authJson.data);
+        }
       }
     } catch (err) {
-      console.warn('[App] Local fallback loading:', err);
+      console.warn('[App] Server API fallback active (using initial offline snapshot):', err);
     } finally {
       setIsLoading(false);
     }

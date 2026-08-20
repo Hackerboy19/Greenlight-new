@@ -39,6 +39,10 @@ import { HeroFeatured } from './components/public/HeroFeatured';
 import { CategoryRow } from './components/public/CategoryRow';
 import { TableOfContents } from './components/public/TableOfContents';
 import { WikiInfobox } from './components/public/WikiInfobox';
+import { AudioReader } from './components/public/AudioReader';
+import { TranslationSelector } from './components/public/TranslationSelector';
+import { AdBanner } from './components/public/AdBanner';
+import { translateArticle } from './utils/translationService';
 import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
 import { AdminArticleModal } from './components/AdminArticleModal';
@@ -82,6 +86,30 @@ export default function App() {
   const [gscRankDrops, setGscRankDrops] = useState<GscRankDrop[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Translation states
+  const [currentLanguage, setCurrentLanguage] = useState<string>('en');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedArticle, setTranslatedArticle] = useState<Article | null>(null);
+
+  // Handle translation change
+  const handleLanguageChange = async (langCode: string) => {
+    setCurrentLanguage(langCode);
+    if (!selectedArticle || langCode === 'en') {
+      setTranslatedArticle(null);
+      return;
+    }
+
+    try {
+      setIsTranslating(true);
+      const trans = await translateArticle(selectedArticle, langCode);
+      setTranslatedArticle(trans);
+    } catch (err) {
+      console.warn('[App] Translation error:', err);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   // Fetch initial public & admin datasets
   const loadData = async () => {
@@ -163,23 +191,39 @@ export default function App() {
     setCurrentView('article');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
+    let fetchedArticle: Article | null = null;
+
     try {
       const res = await fetch(`/api/public/articles/${slug}`);
       if (res.ok) {
         const json = await parseResponseJson(res);
         if (json && json.data) {
-          setSelectedArticle(json.data);
+          fetchedArticle = json.data;
         } else {
-          const local = articles.find(a => a.slug === slug);
-          if (local) setSelectedArticle(local);
+          fetchedArticle = articles.find(a => a.slug === slug) || null;
         }
       } else {
-        const local = articles.find(a => a.slug === slug);
-        if (local) setSelectedArticle(local);
+        fetchedArticle = articles.find(a => a.slug === slug) || null;
       }
     } catch (e) {
-      const local = articles.find(a => a.slug === slug);
-      if (local) setSelectedArticle(local);
+      fetchedArticle = articles.find(a => a.slug === slug) || null;
+    }
+
+    if (fetchedArticle) {
+      setSelectedArticle(fetchedArticle);
+      if (currentLanguage !== 'en') {
+        try {
+          setIsTranslating(true);
+          const trans = await translateArticle(fetchedArticle, currentLanguage);
+          setTranslatedArticle(trans);
+        } catch (err) {
+          console.warn('Translation error:', err);
+        } finally {
+          setIsTranslating(false);
+        }
+      } else {
+        setTranslatedArticle(null);
+      }
     }
   };
 
@@ -409,8 +453,16 @@ export default function App() {
             />
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex items-center gap-2">
+          {/* Quick Actions & Language Selector */}
+          <div className="flex items-center gap-2.5">
+            {/* Global Language Selector */}
+            <TranslationSelector
+              currentLanguage={currentLanguage}
+              onLanguageChange={handleLanguageChange}
+              isTranslating={isTranslating}
+              variant="compact"
+            />
+
             <button
               type="button"
               onClick={() => setIsSearchOpen(!isSearchOpen)}
@@ -447,8 +499,8 @@ export default function App() {
 
         {/* Category Pill Navigation Tabs (in Public View) */}
         {currentView !== 'admin' && (
-          <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 px-4 sm:px-6">
-            <div className="max-w-7xl mx-auto flex items-center gap-1 overflow-x-auto py-2 scrollbar-none text-xs font-semibold">
+          <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/70 px-3 sm:px-6">
+            <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2 scroll-smooth text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => {
@@ -456,10 +508,10 @@ export default function App() {
                   setSearchQuery('');
                   if (currentView === 'article') setCurrentView('public');
                 }}
-                className={`px-3 py-1.5 rounded-full transition-colors whitespace-nowrap ${
+                className={`min-h-[36px] px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
                   activeCategorySlug === 'all' && !searchQuery
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                 }`}
               >
                 Top Stories
@@ -474,10 +526,10 @@ export default function App() {
                     setSearchQuery('');
                     if (currentView === 'article') setCurrentView('public');
                   }}
-                  className={`px-3 py-1.5 rounded-full transition-colors whitespace-nowrap ${
+                  className={`min-h-[36px] px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
                     activeCategorySlug === cat.slug && !searchQuery
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800'
                   }`}
                 >
                   {cat.name}
@@ -488,11 +540,20 @@ export default function App() {
         )}
       </nav>
 
+      {/* Top Advert Leaderboard Banner (Official FSIA / Greenlight) */}
+      <AdBanner
+        variant="leaderboard"
+        customTitle="Forever Star India Awards Season 6 — Grand Conclave Jaipur"
+        customSubtitle="National nominations now open for Entrepreneurs, Healthcare Pioneers, Innovators & Super Women. Claim your recognition."
+        customCta="Nominate Online"
+        targetUrl="https://greenlight.fsia.in/"
+      />
+
       {/* Main Body View Controller */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* VIEW 1: PUBLIC HOMEPAGE / SEARCH RESULTS */}
         {currentView === 'public' && (
-          <div className="space-y-10">
+          <div className="space-y-8 sm:space-y-10">
             {/* Search Query Feedback Banner */}
             {searchQuery && (
               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 flex items-center justify-between">
@@ -507,7 +568,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                  className="min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95"
                 >
                   Clear filter
                 </button>
@@ -522,19 +583,32 @@ export default function App() {
               />
             )}
 
-            {/* Category Rows or Filtered Grid */}
+            {/* Category Rows with Native Mid-Feed Advert */}
             {!searchQuery && activeCategorySlug === 'all' ? (
               <div className="space-y-4">
-                {categories.map((cat) => {
+                {categories.map((cat, idx) => {
                   const catArticles = articles.filter(a => a.category_id === cat.id || a.category_slug === cat.slug);
                   return (
-                    <CategoryRow
-                      key={cat.id}
-                      category={cat}
-                      articles={catArticles}
-                      onSelectArticle={handleSelectArticle}
-                      onSelectCategory={(slug) => setActiveCategorySlug(slug)}
-                    />
+                    <React.Fragment key={cat.id}>
+                      <CategoryRow
+                        category={cat}
+                        articles={catArticles}
+                        onSelectArticle={handleSelectArticle}
+                        onSelectCategory={(slug) => setActiveCategorySlug(slug)}
+                      />
+                      {/* Mid-feed sponsor banner after 2nd category */}
+                      {idx === 1 && (
+                        <div className="py-2">
+                          <AdBanner
+                            variant="mid-article"
+                            customTitle="The Real Super Woman Awards 2026: Honoring Women Trailblazers"
+                            customSubtitle="Recognizing female changemakers in healthcare, enterprise, and social justice across all Indian states."
+                            customCta="Register Free"
+                            targetUrl="https://greenlight.fsia.in/"
+                          />
+                        </div>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -578,153 +652,206 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 2: ARTICLE READER WITH STICKY TOC & WIKIPEDIA INFOBOX */}
-        {currentView === 'article' && selectedArticle && (
-          <article className="max-w-6xl mx-auto space-y-8">
-            {/* Back button & Breadcrumb */}
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setCurrentView('public')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back to Headlines</span>
-              </button>
-
-              <div className="flex items-center gap-2">
+        {/* VIEW 2: ARTICLE READER WITH AUDIO NARRATION, TRANSLATION, STICKY TOC & WIKIPEDIA INFOBOX */}
+        {currentView === 'article' && selectedArticle && (() => {
+          const displayArticle = translatedArticle || selectedArticle;
+          return (
+            <article className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
+              {/* Back button, Breadcrumb & Share */}
+              <div className="flex flex-row items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(window.location.href);
-                    setCopiedUrl(true);
-                    setTimeout(() => setCopiedUrl(false), 2000);
-                  }}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 flex items-center gap-1.5 transition-colors"
+                  onClick={() => setCurrentView('public')}
+                  className="min-h-[40px] px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 transition-colors active:scale-95"
                 >
-                  {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
-                  <span>{copiedUrl ? 'Link Copied' : 'Share Story'}</span>
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Headlines</span>
                 </button>
-              </div>
-            </div>
 
-            {/* Headline Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-bold uppercase rounded-full">
-                  {selectedArticle.category_name}
-                </span>
-                <span className="text-xs text-slate-400 font-mono">
-                  {new Date(selectedArticle.published_at || selectedArticle.created_at).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
-                </span>
-              </div>
-
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-black text-slate-900 dark:text-white leading-tight">
-                {selectedArticle.title}
-              </h1>
-
-              {selectedArticle.excerpt && (
-                <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-300 font-normal leading-relaxed">
-                  {selectedArticle.excerpt}
-                </p>
-              )}
-
-              {/* Author Byline */}
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <img
-                  src={selectedArticle.author_avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80'}
-                  alt={selectedArticle.author_name}
-                  referrerPolicy="no-referrer"
-                  className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-                />
-                <div>
-                  <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                    By {selectedArticle.author_name}
-                  </div>
-                  <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                    <span>Verified Greenlight Correspondent</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {selectedArticle.reading_time || 4} min read
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  {/* Share button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(window.location.href);
+                      setCopiedUrl(true);
+                      setTimeout(() => setCopiedUrl(false), 2000);
+                    }}
+                    className="min-h-[40px] px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 flex items-center gap-1.5 transition-colors shadow-xs active:scale-95"
+                  >
+                    {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
+                    <span>{copiedUrl ? 'Copied' : 'Share'}</span>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Featured Image */}
-            <div className="rounded-3xl overflow-hidden aspect-[21/9] bg-slate-100 dark:bg-slate-800 shadow-md">
-              <img
-                src={selectedArticle.featured_image}
-                alt={selectedArticle.title}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            {/* 3-Column Editorial Grid: TOC (Left), Article Body (Center), Wiki Infobox (Right) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pt-4">
-              {/* Left Column: Sticky Table of Contents */}
-              <div className="hidden lg:block lg:col-span-3">
-                <TableOfContents contentHtml={selectedArticle.content} />
-              </div>
-
-              {/* Center Column: WYSIWYG Content Body */}
-              <div className="lg:col-span-5 space-y-6">
-                <div
-                  id="article-wysiwyg-content"
-                  className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif text-base space-y-4"
-                  dangerouslySetInnerHTML={{ __html: selectedArticle.content }}
+              {/* Translation Pill Bar */}
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <TranslationSelector
+                  currentLanguage={currentLanguage}
+                  onLanguageChange={handleLanguageChange}
+                  isTranslating={isTranslating}
+                  variant="pills"
                 />
+
+                {isTranslating && (
+                  <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 animate-pulse shrink-0">
+                    <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                    <span>Translating article...</span>
+                  </div>
+                )}
               </div>
 
-              {/* Right Column: Wikipedia Infobox Card */}
-              <div className="lg:col-span-4">
-                <WikiInfobox
-                  title={selectedArticle.title}
-                  subtitle={`${selectedArticle.category_name} Overview`}
-                  image={selectedArticle.featured_image}
-                  imageCaption="Editorial verified source facts"
-                  fields={selectedArticle.infobox || []}
-                />
-              </div>
-            </div>
+              {/* Headline Section */}
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-bold uppercase rounded-full">
+                    {displayArticle.category_name}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {new Date(displayArticle.published_at || displayArticle.created_at).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
 
-            {/* Related Stories */}
-            {selectedArticle.related && selectedArticle.related.length > 0 && (
-              <div className="pt-12 border-t border-slate-200 dark:border-slate-800">
-                <h3 className="text-xl font-serif font-bold text-slate-900 dark:text-slate-100 mb-6">
-                  Related Coverage in {selectedArticle.category_name}
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  {selectedArticle.related.map((rel) => (
-                    <div
-                      key={rel.id}
-                      onClick={() => handleSelectArticle(rel.slug)}
-                      className="cursor-pointer group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 hover:shadow-md transition-all"
-                    >
-                      <div className="aspect-[16/10] rounded-xl overflow-hidden mb-3">
-                        <img
-                          src={rel.featured_image}
-                          alt={rel.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                      </div>
-                      <h4 className="text-sm font-serif font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 line-clamp-2">
-                        {rel.title}
-                      </h4>
+                <h1 className="text-2xl sm:text-4xl md:text-5xl font-serif font-black text-slate-900 dark:text-white leading-tight">
+                  {displayArticle.title}
+                </h1>
+
+                {displayArticle.excerpt && (
+                  <p className="text-base sm:text-xl text-slate-600 dark:text-slate-300 font-normal leading-relaxed">
+                    {displayArticle.excerpt}
+                  </p>
+                )}
+
+                {/* Author Byline */}
+                <div className="flex items-center gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                  <img
+                    src={displayArticle.author_avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80'}
+                    alt={displayArticle.author_name}
+                    referrerPolicy="no-referrer"
+                    className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      By {displayArticle.author_name}
                     </div>
-                  ))}
+                    <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                      <span>Verified Greenlight Correspondent</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {displayArticle.reading_time || 4} min read
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
-          </article>
-        )}
+
+              {/* Audio Article Reader Player */}
+              <AudioReader
+                title={displayArticle.title}
+                contentHtml={displayArticle.content}
+                excerpt={displayArticle.excerpt}
+                authorName={displayArticle.author_name}
+                languageCode={currentLanguage}
+              />
+
+              {/* Featured Image */}
+              <div className="rounded-3xl overflow-hidden aspect-[16/10] sm:aspect-[21/9] bg-slate-100 dark:bg-slate-800 shadow-md">
+                <img
+                  src={displayArticle.featured_image}
+                  alt={displayArticle.title}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Mobile Table of Contents Accordion (Visible on Mobile & Tablet) */}
+              <div className="block lg:hidden">
+                <TableOfContents contentHtml={displayArticle.content} isMobile={true} />
+              </div>
+
+              {/* 3-Column Editorial Grid: TOC (Left), Article Body (Center), Wiki Infobox & Sidebar Ad (Right) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pt-2">
+                {/* Left Column: Sticky Table of Contents (Desktop) */}
+                <div className="hidden lg:block lg:col-span-3">
+                  <TableOfContents contentHtml={displayArticle.content} />
+                </div>
+
+                {/* Center Column: WYSIWYG Content Body with Mid-Article Sponsored Box */}
+                <div className="lg:col-span-5 space-y-6">
+                  <div
+                    id="article-wysiwyg-content"
+                    className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif text-base space-y-4"
+                    dangerouslySetInnerHTML={{ __html: displayArticle.content }}
+                  />
+
+                  {/* Mid-Article Sponsored Feature */}
+                  <AdBanner
+                    variant="mid-article"
+                    customTitle="Forever Star India Awards Season 6"
+                    customSubtitle="Nominate top entrepreneurs, innovators, healthcare leaders, and creators for national prestige."
+                    customCta="Nominate Now"
+                    targetUrl="https://greenlight.fsia.in/"
+                  />
+                </div>
+
+                {/* Right Column: Wikipedia Infobox Card & Sidebar Ad */}
+                <div className="lg:col-span-4 space-y-6">
+                  <WikiInfobox
+                    title={displayArticle.title}
+                    subtitle={`${displayArticle.category_name} Overview`}
+                    image={displayArticle.featured_image}
+                    imageCaption="Editorial verified source facts"
+                    fields={displayArticle.infobox || []}
+                  />
+
+                  {/* Sticky Sidebar Advertisement */}
+                  <AdBanner
+                    variant="sidebar"
+                    customTitle="Forever Miss & Mrs India 2026"
+                    customSubtitle="National talent auditions open across 28 states. Transform your career in pageantry & media."
+                    customCta="Register for Auditions"
+                    targetUrl="https://greenlight.fsia.in/"
+                  />
+                </div>
+              </div>
+
+              {/* Related Stories */}
+              {displayArticle.related && displayArticle.related.length > 0 && (
+                <div className="pt-12 border-t border-slate-200 dark:border-slate-800">
+                  <h3 className="text-xl font-serif font-bold text-slate-900 dark:text-slate-100 mb-6">
+                    Related Coverage in {displayArticle.category_name}
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    {displayArticle.related.map((rel) => (
+                      <div
+                        key={rel.id}
+                        onClick={() => handleSelectArticle(rel.slug)}
+                        className="cursor-pointer group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 hover:shadow-md transition-all"
+                      >
+                        <div className="aspect-[16/10] rounded-xl overflow-hidden mb-3">
+                          <img
+                            src={rel.featured_image}
+                            alt={rel.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        </div>
+                        <h4 className="text-sm font-serif font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 line-clamp-2">
+                          {rel.title}
+                        </h4>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })()}
 
         {/* VIEW 3: ADMIN CMS DASHBOARD */}
         {currentView === 'admin' && (
@@ -742,11 +869,11 @@ export default function App() {
               </div>
 
               {/* Sub-Navigation Tabs */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-semibold">
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-semibold overflow-x-auto no-scrollbar max-w-full">
                 <button
                   type="button"
                   onClick={() => setAdminTab('gsc')}
-                  className={`px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
                     adminTab === 'gsc'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -759,7 +886,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAdminTab('articles')}
-                  className={`px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
                     adminTab === 'articles'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -772,7 +899,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAdminTab('categories')}
-                  className={`px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
                     adminTab === 'categories'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -785,7 +912,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAdminTab('authors')}
-                  className={`px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 ${
+                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
                     adminTab === 'authors'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -1101,6 +1228,14 @@ export default function App() {
           </div>
         </div>
       </footer>
+      {/* Bottom Sticky Sponsor Bar */}
+      <AdBanner
+        variant="bottom-sticky"
+        customTitle="FSIA Season 6 Conclave Jaipur — National Nominations Open"
+        customSubtitle="Recognizing top national talent in business, leadership, healthcare, and education."
+        customCta="Apply Now"
+        targetUrl="https://greenlight.fsia.in/"
+      />
     </div>
   );
 }

@@ -17,16 +17,19 @@ export interface TableOfContentsProps {
   contentHtml?: string;
   headings?: TocHeading[];
   className?: string;
+  isMobile?: boolean;
 }
 
 export const TableOfContents: React.FC<TableOfContentsProps> = ({
   contentHtml,
   headings: initialHeadings,
-  className = ""
+  className = "",
+  isMobile = false
 }) => {
   const [headings, setHeadings] = useState<TocHeading[]>(initialHeadings || []);
   const [activeId, setActiveId] = useState<string>('');
   const [readProgress, setReadProgress] = useState(0);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Parse headings from DOM or HTML
   useEffect(() => {
@@ -107,6 +110,69 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
     return null;
   }
 
+  // Mobile Accordion Mode
+  if (isMobile) {
+    return (
+      <div className={`rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xs overflow-hidden ${className}`}>
+        {/* Mobile Header Accordion Trigger */}
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
+          className="w-full min-h-[44px] px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors active:bg-slate-50 dark:active:bg-slate-800/60"
+          aria-expanded={isMobileOpen}
+        >
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+            <ListTree className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Table of Contents ({headings.length} sections)</span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+              {Math.round(readProgress)}%
+            </span>
+            <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isMobileOpen ? 'rotate-90' : ''}`} />
+          </div>
+        </button>
+
+        {/* Reading Progress Line */}
+        <div className="w-full h-1 bg-slate-100 dark:bg-slate-800">
+          <div 
+            className="h-full bg-emerald-600 dark:bg-emerald-500 transition-all duration-150"
+            style={{ width: `${readProgress}%` }}
+          />
+        </div>
+
+        {/* Collapsible Headings List */}
+        {isMobileOpen && (
+          <div className="p-3 bg-slate-50/70 dark:bg-slate-950/40 border-t border-slate-100 dark:border-slate-800/80 max-h-72 overflow-y-auto space-y-1">
+            {headings.map((heading) => {
+              const isActive = activeId === heading.id;
+              return (
+                <button
+                  key={heading.id}
+                  type="button"
+                  onClick={() => {
+                    scrollToHeading(heading.id);
+                    setIsMobileOpen(false);
+                  }}
+                  className={`w-full min-h-[44px] text-left px-3 py-2 rounded-xl transition-all flex items-center gap-2 ${
+                    heading.level === 3 ? 'pl-6 text-[12px]' : 'font-semibold text-xs'
+                  } ${
+                    isActive
+                      ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="truncate">{heading.text}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <nav 
       id="article-table-of-contents"
@@ -139,7 +205,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({
               <button
                 type="button"
                 onClick={() => scrollToHeading(heading.id)}
-                className={`w-full text-left py-1.5 px-2.5 rounded-lg transition-colors flex items-center gap-1.5 group ${
+                className={`w-full text-left py-2 px-2.5 rounded-lg transition-colors flex items-center gap-1.5 group ${
                   heading.level === 3 ? 'pl-5 text-[11px]' : 'font-semibold text-xs'
                 } ${
                   isActive

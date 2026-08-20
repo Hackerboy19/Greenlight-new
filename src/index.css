@@ -53,3 +53,86 @@ body {
   color: #1E293B;
   word-break: break-word;
 }
+
+/* Editorial article styling for scraped greenlight HTML */
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  font-weight: 700;
+  color: #0F172A;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+}
+
+.dark .prose h1, .dark .prose h2, .dark .prose h3, .dark .prose h4 {
+  color: #F8FAFC;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  border-bottom: 1px solid #E2E8F0;
+  padding-bottom: 0.5rem;
+}
+
+.dark .prose h2 {
+  border-color: #334155;
+}
+
+.prose h3 {
+  font-size: 1.25rem;
+}
+
+.prose p {
+  margin-bottom: 1.25rem;
+  line-height: 1.8;
+  color: #334155;
+}
+
+.dark .prose p {
+  color: #CBD5E1;
+}
+
+.prose ul, .prose ol {
+  margin-bottom: 1.25rem;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
+}
+
+.prose li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.prose strong, .prose b {
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.dark .prose strong, .dark .prose b {
+  color: #F8FAFC;
+}
+
+.prose blockquote {
+  border-left: 4px solid #10B981;
+  padding-left: 1rem;
+  font-style: italic;
+  margin: 1.5rem 0;
+  color: #475569;
+}
+
+.dark .prose blockquote {
+  color: #94A3B8;
+}
+
+.prose img {
+  border-radius: 1rem;
+  margin: 1.5rem 0;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+

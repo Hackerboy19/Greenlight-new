@@ -21,7 +21,11 @@ import {
   Copy,
   Layers,
   Sparkle,
-  BookOpen
+  BookOpen,
+  Share2,
+  ExternalLink,
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
@@ -60,6 +64,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [featuredImage, setFeaturedImage] = useState('');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
+  const [ogImage, setOgImage] = useState('');
+  const [previewTab, setPreviewTab] = useState<'google' | 'social' | 'twitter' | 'whatsapp'>('google');
+  const [copiedTags, setCopiedTags] = useState(false);
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1);
   const [authorId, setAuthorId] = useState<number>(authors[0]?.id || 1);
   const [status, setStatus] = useState<'published' | 'draft' | 'archived'>('published');
@@ -79,6 +86,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setFeaturedImage(article.featured_image || '');
       setMetaTitle(article.meta_title || article.title || '');
       setMetaDescription(article.meta_description || article.excerpt || '');
+      setOgImage(article.og_image || article.featured_image || '');
       setCategoryId(article.category_id || defaultCatId);
       setAuthorId(article.author_id || defaultAuthId);
       setStatus(article.status || 'published');
@@ -88,9 +96,11 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setTitle('');
       setExcerpt('');
       setContent('<h2>Key Developments</h2><p>Forever Star India Awards continues to set new national benchmarks for recognizing trailblazers across fashion, industry, and social innovation.</p><h3>National Impact & Reach</h3><p>Connecting awardees across 28 states with direct media broadcasting and verified knowledge credentials.</p>');
-      setFeaturedImage('https://greenlight.fsia.in/assets/img/blog/1774683990.png');
+      const defaultImg = 'https://greenlight.fsia.in/assets/img/blog/1774683990.png';
+      setFeaturedImage(defaultImg);
       setMetaTitle('');
       setMetaDescription('');
+      setOgImage(defaultImg);
       setCategoryId(defaultCatId);
       setAuthorId(defaultAuthId);
       setStatus('published');
@@ -109,7 +119,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   // Helpers for SEO auto-sync
   const handleAutoFillMetaTitle = () => {
     if (title.trim()) {
-      setMetaTitle(`${title.trim()} | Greenlight FSIA`);
+      setMetaTitle(`${title.trim()} | Greenlight FSIA Official`);
     }
   };
 
@@ -122,9 +132,16 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
     }
   };
 
+  const handleSyncOgImageFromFeatured = () => {
+    if (featuredImage.trim()) {
+      setOgImage(featuredImage.trim());
+    }
+  };
+
   // SEO Score calculation helpers
   const titleLength = metaTitle.length;
   const descLength = metaDescription.length;
+  const activeOgImage = ogImage.trim() || featuredImage.trim();
 
   const getTitleStatus = () => {
     if (titleLength === 0) return { label: 'Empty', color: 'text-slate-400 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800' };
@@ -144,7 +161,36 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const descStatus = getDescStatus();
 
   // Generated slug for snippet preview
-  const previewSlug = article?.slug || (title ? title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').slice(0, 50) : 'headline-slug');
+  const previewSlug = article?.slug || (title ? title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').slice(0, 50) : 'editorial-headline-slug');
+  const canonicalUrl = `https://greenlight.fsia.in/article/${previewSlug}`;
+
+  // Generated HTML Meta Tags for Developer Copy
+  const generatedMetaTags = `<!-- Primary Meta Tags -->
+<title>${metaTitle || title || 'Greenlight FSIA Official Story'}</title>
+<meta name="title" content="${metaTitle || title || ''}">
+<meta name="description" content="${metaDescription || excerpt || ''}">
+<link rel="canonical" href="${canonicalUrl}">
+
+<!-- Open Graph / Facebook / LinkedIn / WhatsApp -->
+<meta property="og:type" content="article">
+<meta property="og:url" content="${canonicalUrl}">
+<meta property="og:title" content="${metaTitle || title || ''}">
+<meta property="og:description" content="${metaDescription || excerpt || ''}">
+<meta property="og:image" content="${activeOgImage}">
+<meta property="og:site_name" content="Greenlight FSIA News Platform">
+
+<!-- Twitter Cards -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="${canonicalUrl}">
+<meta property="twitter:title" content="${metaTitle || title || ''}">
+<meta property="twitter:description" content="${metaDescription || excerpt || ''}">
+<meta property="twitter:image" content="${activeOgImage}">`;
+
+  const handleCopyMetaTags = () => {
+    navigator.clipboard.writeText(generatedMetaTags);
+    setCopiedTags(true);
+    setTimeout(() => setCopiedTags(false), 2500);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +210,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
         featured_image: featuredImage,
         meta_title: metaTitle.trim() || title,
         meta_description: metaDescription.trim() || excerpt,
+        og_image: ogImage.trim() || featuredImage,
         category_id: Number(categoryId) || 1,
         author_id: Number(authorId) || 1,
         status,
@@ -238,9 +285,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
             >
               <Search className="w-4 h-4 shrink-0" />
               <span className="truncate">
-                <span className="sm:hidden">2. SEO</span>
-                <span className="hidden sm:inline md:hidden">2. Google SEO</span>
-                <span className="hidden md:inline">2. Google SEO & Meta</span>
+                <span className="sm:hidden">2. SEO &amp; OG</span>
+                <span className="hidden sm:inline md:hidden">2. SEO &amp; Social</span>
+                <span className="hidden md:inline">2. Google SEO &amp; Open Graph</span>
               </span>
             </button>
 
@@ -438,42 +485,94 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: GOOGLE SEO & SERP */}
+          {/* TAB 2: GOOGLE SEO & OPEN GRAPH SOCIAL METADATA */}
           {modalTab === 'seo' && (
-            <div id="article-seo-settings-panel" className="p-4 sm:p-6 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-100 dark:border-emerald-900/40 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                    <Search className="w-4 h-4" />
+            <div id="article-seo-settings-panel" className="space-y-6">
+              {/* Header Overview Card */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/30 dark:from-emerald-950/30 dark:via-slate-900 dark:to-emerald-950/20 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100 dark:border-emerald-900/40 pb-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+                      <Search className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <span>Search Visibility & Open Graph Metadata</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
+                          SEO & Social
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Configure Meta Title, Meta Description, and Open Graph Share Image (<code className="font-mono text-[11px] text-emerald-700 dark:text-emerald-300">og:image</code>) for Google Search, Discover, and social sharing.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      Search Engine Optimization (Google SEO & SERP Snippet)
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Optimize how your article ranks on Google, Google Discover, and social platforms
-                    </p>
+
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <span className="text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      greenlight.fsia.in
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCopyMetaTags}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+                      title="Copy raw HTML meta tags to clipboard"
+                    >
+                      {copiedTags ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                      <span>{copiedTags ? 'Tags Copied!' : 'Copy HTML Tags'}</span>
+                    </button>
                   </div>
                 </div>
 
-                <span className="text-xs font-mono text-slate-500 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800">
-                  sc-domain: greenlight.fsia.in
-                </span>
+                {/* Readiness Score Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Meta Title:</span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${titleStatus.color}`}>
+                      {titleLength}/60 ({titleStatus.label})
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Meta Description:</span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${descStatus.color}`}>
+                      {descLength}/160 ({descStatus.label})
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Open Graph Image:</span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
+                      activeOgImage ? 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50' : 'text-amber-700 border-amber-200 bg-amber-50'
+                    }`}>
+                      {activeOgImage ? 'Configured (1200x630)' : 'Missing (Default)'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Meta Title */}
+              {/* SECTION 1: META TITLE & META DESCRIPTION */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-2xs">
+                <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <Globe className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                    1. Search Engine Snippet Metadata
+                  </h4>
+                </div>
+
+                {/* Meta Title Field */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="article-meta-title-input" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      SEO Google Title (<code className="text-[10px] font-mono bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">meta_title</code>)
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <label htmlFor="article-meta-title-input" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>Meta Title</span>
+                      <code className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                        &lt;meta name="title"&gt; &amp; &lt;meta property="og:title"&gt;
+                      </code>
                     </label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         id="meta-title-autofill-btn"
                         onClick={handleAutoFillMetaTitle}
-                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-1"
                       >
                         <Sparkles className="w-3 h-3" />
                         <span>Auto-fill from Headline</span>
@@ -488,26 +587,29 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                     id="article-meta-title-input"
                     value={metaTitle}
                     onChange={(e) => setMetaTitle(e.target.value)}
-                    placeholder="e.g. Forever Star India Awards Season 5 | FSIA Jaipur Gala"
+                    placeholder="e.g. Forever Star India Awards Season 5 in Jaipur | FSIA Official Gala"
                     className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                   />
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    Optimal length: 50-60 characters. This is the blue headline Google displays in search results.
+                    Google displays the first 50–60 characters. Keep primary brand keywords like "Forever Star India Awards" or the subject name near the beginning.
                   </p>
                 </div>
 
-                {/* Meta Description */}
+                {/* Meta Description Field */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="article-meta-description-input" className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      SEO Meta Description (<code className="text-[10px] font-mono bg-slate-200 dark:bg-slate-800 px-1 py-0.5 rounded">meta_description</code>)
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <label htmlFor="article-meta-description-input" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>Meta Description</span>
+                      <code className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                        &lt;meta name="description"&gt; &amp; &lt;meta property="og:description"&gt;
+                      </code>
                     </label>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         id="meta-desc-autofill-btn"
                         onClick={handleAutoFillMetaDescription}
-                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-1"
                       >
                         <Sparkles className="w-3 h-3" />
                         <span>Auto-fill from Summary</span>
@@ -522,28 +624,188 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                     id="article-meta-description-input"
                     value={metaDescription}
                     onChange={(e) => setMetaDescription(e.target.value)}
-                    placeholder="e.g. Discover Forever Star India Awards (FSIA) Season 5 in Jaipur — bringing together 400+ national awardees, celebrity runways, and grassroots champions."
+                    placeholder="e.g. In-depth coverage of Forever Star India Awards (FSIA) Season 5 in Jaipur — honoring nationwide talent, celebrity runways, and social impact leaders."
                     className="w-full text-xs font-normal px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                   />
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    Optimal length: 120-160 characters. Provides the preview snippet under the search headline to drive clicks.
+                    Optimal length: 120–160 characters. A concise, engaging summary increases Google CTR and WhatsApp link preview clarity.
+                  </p>
+                </div>
+              </div>
+
+              {/* SECTION 2: OPEN GRAPH SHARE IMAGE (og:image) */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-emerald-600" />
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                      2. Open Graph Share Image (<code className="font-mono text-emerald-600 lowercase font-normal">og:image</code>)
+                    </h4>
+                  </div>
+
+                  <button
+                    type="button"
+                    id="sync-og-from-featured-btn"
+                    onClick={handleSyncOgImageFromFeatured}
+                    className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Copy from Featured Cover</span>
+                  </button>
+                </div>
+
+                <div>
+                  <label htmlFor="article-og-image-input" className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Social Sharing Image URL
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="url"
+                        id="article-og-image-input"
+                        value={ogImage}
+                        onChange={(e) => setOgImage(e.target.value)}
+                        placeholder="https://greenlight.fsia.in/assets/img/blog/1774683990.png"
+                        className="w-full text-xs font-mono pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Recommended resolution: <strong>1200 × 630 pixels</strong> (Aspect ratio 1.91:1). Used as the high-resolution hero thumbnail on Facebook, WhatsApp, LinkedIn, Twitter Cards, and Telegram.
                   </p>
                 </div>
 
-                {/* Google Live SERP Snippet Preview */}
-                <div className="pt-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Live Google Search Snippet Simulation</span>
+                {/* Stock Presets for Fast Open Graph Setup */}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                    Quick Preset Share Images:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STOCK_IMAGE_PRESETS.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setOgImage(preset.url)}
+                        className={`text-[11px] px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
+                          ogImage === preset.url
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-700 dark:text-emerald-300 font-bold'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <ImageIcon className="w-3 h-3 text-slate-400" />
+                        <span>{preset.label}</span>
+                      </button>
+                    ))}
                   </div>
-                  <div id="google-serp-preview-card" className="p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs">
-                      <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                </div>
+
+                {/* Open Graph Image Visual Preview Box */}
+                {activeOgImage && (
+                  <div className="pt-2">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Open Graph Image Preview</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-900">
+                        1200x630 px (1.91:1 Ratio)
+                      </span>
+                    </div>
+
+                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900 group max-h-48 flex items-center justify-center">
+                      <img
+                        src={activeOgImage}
+                        alt="Open Graph share preview"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-48 object-cover group-hover:scale-102 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 flex flex-col justify-between p-3 pointer-events-none">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-black/60 text-white backdrop-blur-xs">
+                            og:image
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white">
+                            Active
+                          </span>
+                        </div>
+                        <div className="text-white">
+                          <p className="text-xs font-bold line-clamp-1">{metaTitle || title || 'Story Title'}</p>
+                          <p className="text-[10px] text-slate-300 font-mono">greenlight.fsia.in</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: MULTI-PLATFORM SERP & SOCIAL SHARING PREVIEWS */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-emerald-600" />
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                      3. Live Social &amp; Search Simulator
+                    </h4>
+                  </div>
+
+                  {/* Platform Switcher Pills */}
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('google')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        previewTab === 'google'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Google Search</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('social')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        previewTab === 'social'
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Facebook &amp; LinkedIn</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('whatsapp')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        previewTab === 'whatsapp'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      <span>WhatsApp Link</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Google Search SERP Simulator */}
+                {previewTab === 'google' && (
+                  <div id="google-serp-preview-card" className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm space-y-2">
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
                         G
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[12px] font-medium text-slate-900 dark:text-slate-100 leading-none">Greenlight FSIA Official</span>
-                        <span className="text-[11px] text-slate-500 font-mono truncate max-w-sm">
+                        <span className="text-[13px] font-medium text-slate-900 dark:text-slate-100 leading-none">Greenlight FSIA Official</span>
+                        <span className="text-[11px] text-slate-500 font-mono truncate max-w-sm sm:max-w-md">
                           https://greenlight.fsia.in › article › {previewSlug}
                         </span>
                       </div>
@@ -556,6 +818,87 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                     <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
                       {metaDescription || excerpt || 'Read verified in-depth reporting, editorial analysis, and factsheet credentials on Greenlight FSIA.'}
                     </p>
+                  </div>
+                )}
+
+                {/* Facebook / LinkedIn Open Graph Simulator */}
+                {previewTab === 'social' && (
+                  <div id="facebook-og-preview-card" className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm max-w-lg">
+                    {activeOgImage && (
+                      <div className="w-full h-48 sm:h-56 bg-slate-900 overflow-hidden">
+                        <img
+                          src={activeOgImage}
+                          alt="Open Graph share card"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="p-3.5 bg-slate-100/70 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 space-y-1">
+                      <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-bold block">
+                        GREENLIGHT.FSIA.IN
+                      </span>
+                      <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
+                        {metaTitle || title || 'Forever Star India Awards - Greenlight FSIA'}
+                      </h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+                        {metaDescription || excerpt || 'Official editorial coverage, verified factsheets, and recipient stories.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* WhatsApp Chat Preview Bubble */}
+                {previewTab === 'whatsapp' && (
+                  <div id="whatsapp-og-preview-card" className="p-3 bg-[#EFEAE2] dark:bg-slate-950 rounded-2xl max-w-md">
+                    <div className="bg-white dark:bg-[#1F2C34] rounded-xl p-2 shadow-sm border border-black/5 dark:border-white/5 space-y-2">
+                      {activeOgImage && (
+                        <div className="w-full h-36 rounded-lg overflow-hidden bg-slate-900">
+                          <img
+                            src={activeOgImage}
+                            alt="WhatsApp link preview"
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="px-1 space-y-1">
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
+                          {metaTitle || title || 'Editorial Headline - Greenlight'}
+                        </h4>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2">
+                          {metaDescription || excerpt || 'Comprehensive coverage and official factsheet on greenlight.fsia.in'}
+                        </p>
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          greenlight.fsia.in
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 4: CANONICAL & ROBOTS DIRECTIVES */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/70 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Search Engine Directives &amp; Structured Schema</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-900">
+                    index, follow, max-image-preview:large
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-400 pt-1">
+                  <div>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Canonical Target:</span>{' '}
+                    <code className="font-mono text-[10px] text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 truncate inline-block max-w-full">
+                      {canonicalUrl}
+                    </code>
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Schema.org Target:</span>{' '}
+                    <span className="font-mono text-[10px]">NewsArticle + FactCheck + Organization</span>
                   </div>
                 </div>
               </div>
@@ -612,7 +955,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                 onClick={() => setModalTab('seo')}
                 className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1.5 active:scale-95"
               >
-                <span>Next: SEO</span>
+                <span>Next: SEO &amp; Social (OG)</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}

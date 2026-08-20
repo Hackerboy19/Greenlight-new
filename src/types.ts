@@ -11,6 +11,7 @@ export interface Article {
   featured_image: string;
   meta_title?: string;
   meta_description?: string;
+  og_image?: string;
   category_id: number;
   category_name: string;
   category_slug: string;

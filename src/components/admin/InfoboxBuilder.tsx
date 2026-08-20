@@ -15,6 +15,46 @@ export interface InfoboxBuilderProps {
   className?: string;
 }
 
+const TOPIC_PRESETS = [
+  {
+    name: '🏆 Awards & Conclave',
+    fields: [
+      { section: 'Event Details', field_key: 'Award Name', field_value: 'Forever Star India Awards' },
+      { section: 'Event Details', field_key: 'Venue', field_value: 'Jaipur Convention Centre, Rajasthan' },
+      { section: 'Event Details', field_key: 'Frequency', field_value: 'Annual Season' },
+      { section: 'Impact', field_key: 'Awardees Recognized', field_value: '400+ National Achievers' },
+      { section: 'Impact', field_key: 'Coverage', field_value: 'Pan-India (28 States & UTs)' }
+    ]
+  },
+  {
+    name: '🏢 Organization & Startup',
+    fields: [
+      { section: 'Overview', field_key: 'Entity Name', field_value: 'FSIA Media Network' },
+      { section: 'Overview', field_key: 'Headquarters', field_value: 'Jaipur, India' },
+      { section: 'Overview', field_key: 'Primary Sector', field_value: 'Media & Talent Platform' },
+      { section: 'Operations', field_key: 'Official Portal', field_value: 'greenlight.fsia.in' }
+    ]
+  },
+  {
+    name: '👤 Personality & Leader',
+    fields: [
+      { section: 'Profile', field_key: 'Full Name', field_value: 'Rajesh Sharma' },
+      { section: 'Profile', field_key: 'Designation', field_value: 'Founding Director & Convenor' },
+      { section: 'Recognition', field_key: 'Key Milestone', field_value: 'Pioneered Forever Star India Conclaves' },
+      { section: 'Recognition', field_key: 'Affiliation', field_value: 'FSIA Awards Council' }
+    ]
+  },
+  {
+    name: '🏨 Luxury & Hospitality',
+    fields: [
+      { section: 'Property', field_key: 'Category', field_value: '5-Star Luxury Resort' },
+      { section: 'Property', field_key: 'Location', field_value: 'Jaipur, Rajasthan' },
+      { section: 'Features', field_key: 'Architecture', field_value: 'Rajasthani Royal Heritage' },
+      { section: 'Features', field_key: 'Capacity', field_value: 'Grand Ballroom & Convention Lawn' }
+    ]
+  }
+];
+
 const COMMON_PRESET_FIELDS = [
   { section: 'Overview', key: 'Industry', sample: 'Aerospace & Quantum Systems' },
   { section: 'Overview', key: 'Headquarters', sample: 'Jaipur, Rajasthan, India' },
@@ -88,52 +128,75 @@ export const InfoboxBuilder: React.FC<InfoboxBuilderProps> = ({
           </div>
         </div>
 
-        {/* Tab Controls */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+        {/* Tab Controls - Auto Adjusting */}
+        <div className="grid grid-cols-2 sm:flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setActiveTab('editor')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'editor'
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm font-bold'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            Form Editor
+            <span>Form Editor</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('preview')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+            className={`min-h-[36px] px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'preview'
-                ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm font-bold'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
-            <Eye className="w-3.5 h-3.5" />
+            <Eye className="w-3.5 h-3.5 shrink-0" />
             <span>Live Output</span>
           </button>
         </div>
       </div>
 
-      {/* Preset Quick Chips */}
+      {/* Preset Quick Chips - Responsive Auto Adjusting */}
       {activeTab === 'editor' && (
-        <div className="py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 overflow-x-auto text-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex-shrink-0 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>Quick Presets:</span>
-          </span>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {COMMON_PRESET_FIELDS.slice(0, 6).map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => handleAddPreset(preset)}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 text-slate-700 dark:text-slate-300 text-[11px] font-medium transition-colors"
-              >
-                + {preset.key}
-              </button>
-            ))}
+        <div className="py-3 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span>1-Click Factsheet Presets:</span>
+            </span>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+              {TOPIC_PRESETS.map((tPreset) => (
+                <button
+                  key={tPreset.name}
+                  type="button"
+                  onClick={() => {
+                    setFields(tPreset.fields);
+                    onChange(tPreset.fields);
+                  }}
+                  className="min-h-[32px] px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 text-[11px] font-bold transition-all whitespace-nowrap shadow-2xs shrink-0 active:scale-95"
+                >
+                  {tPreset.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs pt-1">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+              Add Individual Key:
+            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {COMMON_PRESET_FIELDS.slice(0, 6).map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => handleAddPreset(preset)}
+                  className="px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-600 dark:text-slate-300 text-[10px] font-medium transition-colors"
+                >
+                  + {preset.key}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

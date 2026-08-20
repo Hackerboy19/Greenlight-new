@@ -177,26 +177,27 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Metric filters */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Metric filters - Responsive Auto Adjusting */}
+            <div className="grid grid-cols-4 sm:flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setActiveMetric('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-center ${
                   activeMetric === 'all' 
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' 
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm font-bold' 
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
                 }`}
               >
-                All Metrics
+                <span className="sm:hidden">All</span>
+                <span className="hidden sm:inline">All Metrics</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveMetric('clicks')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-center ${
                   activeMetric === 'clicks' 
-                    ? 'bg-blue-600 text-white shadow-sm' 
+                    ? 'bg-blue-600 text-white shadow-sm font-bold' 
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
                 }`}
               >
@@ -205,37 +206,39 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveMetric('impressions')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-center ${
                   activeMetric === 'impressions' 
-                    ? 'bg-purple-600 text-white shadow-sm' 
+                    ? 'bg-purple-600 text-white shadow-sm font-bold' 
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
                 }`}
               >
-                Impressions
+                <span className="sm:hidden">Impr</span>
+                <span className="hidden sm:inline">Impressions</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveMetric('position')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`min-h-[36px] px-2.5 sm:px-3 py-1.5 rounded-lg transition-all text-center ${
                   activeMetric === 'position' 
-                    ? 'bg-amber-600 text-white shadow-sm' 
+                    ? 'bg-amber-600 text-white shadow-sm font-bold' 
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
                 }`}
               >
-                Position
+                <span className="sm:hidden">Pos</span>
+                <span className="hidden sm:inline">Position</span>
               </button>
             </div>
 
-            {/* Time range selector */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+            {/* Time range selector - Auto Adjusting */}
+            <div className="flex items-center justify-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold w-full sm:w-auto">
               {['7d', '28d', '90d'].map((range) => (
                 <button
                   key={range}
                   type="button"
                   onClick={() => handleRangeSelect(range)}
-                  className={`px-2.5 py-1.5 rounded-lg transition-all uppercase ${
+                  className={`flex-1 sm:flex-initial min-h-[36px] px-3 sm:px-2.5 py-1.5 rounded-lg transition-all uppercase text-center ${
                     selectedRange === range
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm font-bold'
                       : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'
                   }`}
                 >

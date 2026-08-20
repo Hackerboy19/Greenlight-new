@@ -12,6 +12,7 @@ import {
   Sparkles, 
   Clock, 
   ChevronRight, 
+  ChevronLeft,
   ArrowLeft, 
   Share2, 
   Bookmark, 
@@ -31,7 +32,17 @@ import {
   Moon,
   Sun,
   LayoutDashboard,
-  Flame
+  Flame,
+  Copy,
+  LayoutGrid,
+  List,
+  FolderPlus,
+  UserPlus,
+  Eye,
+  HelpCircle,
+  Filter,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -69,10 +80,28 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  // Admin CMS Sub-tabs
-  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors'>('gsc');
+  // Admin CMS Sub-tabs & Filter states
+  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors'>('articles');
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [adminArticleSearch, setAdminArticleSearch] = useState('');
+  const [adminArticleCategoryFilter, setAdminArticleCategoryFilter] = useState('all');
+  const [adminArticleStatusFilter, setAdminArticleStatusFilter] = useState('all');
+  const [adminArticleViewMode, setAdminArticleViewMode] = useState<'table' | 'cards'>('cards');
+
+  // Category Modal state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryDesc, setNewCategoryDesc] = useState('');
+
+  // Author Modal state
+  const [isAuthorModalOpen, setIsAuthorModalOpen] = useState(false);
+  const [newAuthorName, setNewAuthorName] = useState('');
+  const [newAuthorEmail, setNewAuthorEmail] = useState('');
+  const [newAuthorRole, setNewAuthorRole] = useState<'admin' | 'editor' | 'author'>('author');
+  const [newAuthorBio, setNewAuthorBio] = useState('');
+  const [newAuthorAvatar, setNewAuthorAvatar] = useState('');
+
   const [isSyncingGsc, setIsSyncingGsc] = useState(false);
   const [gscSyncMessage, setGscSyncMessage] = useState<string | null>(null);
   const [isSyncingLive, setIsSyncingLive] = useState(false);
@@ -91,6 +120,34 @@ export default function App() {
   const [currentLanguage, setCurrentLanguage] = useState<string>('en');
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedArticle, setTranslatedArticle] = useState<Article | null>(null);
+
+  // Category Nav Scroll & Responsive State
+  const categoryScrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkCategoryScroll = () => {
+    if (categoryScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = categoryScrollRef.current;
+      setCanScrollLeft(scrollLeft > 8);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 8);
+    }
+  };
+
+  useEffect(() => {
+    checkCategoryScroll();
+    const handleResize = () => checkCategoryScroll();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [categories]);
+
+  const handleScrollCategories = (direction: 'left' | 'right') => {
+    if (categoryScrollRef.current) {
+      const offset = direction === 'left' ? -220 : 220;
+      categoryScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+      setTimeout(checkCategoryScroll, 320);
+    }
+  };
 
   // Handle translation change
   const handleLanguageChange = async (langCode: string) => {
@@ -352,6 +409,152 @@ export default function App() {
     }
   };
 
+  // Non-Tech Easy Actions: Clone / Duplicate Article as Template
+  const handleDuplicateArticle = (art: Article) => {
+    const cloned: Article = {
+      ...art,
+      id: undefined as any,
+      title: `${art.title} (Draft Copy)`,
+      slug: `${art.slug}-copy-${Date.now().toString().slice(-4)}`,
+      status: 'draft'
+    };
+    setEditingArticle(cloned);
+    setIsArticleModalOpen(true);
+  };
+
+  // Create Category Handler
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    const slug = newCategoryName.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+    const newCat: Category = {
+      id: Date.now(),
+      name: newCategoryName.trim(),
+      slug: slug || `category-${Date.now()}`,
+      display_order: categories.length + 1,
+      description: newCategoryDesc || `Featured reports and editorial updates in ${newCategoryName.trim()}`,
+      is_active: 1
+    };
+
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-role': 'admin'
+        },
+        body: JSON.stringify(newCat)
+      });
+      if (res.ok) {
+        const json = await parseResponseJson(res);
+        if (json && json.data) {
+          setCategories(prev => [...prev, json.data]);
+        } else {
+          setCategories(prev => [...prev, newCat]);
+        }
+      } else {
+        setCategories(prev => [...prev, newCat]);
+      }
+    } catch {
+      setCategories(prev => [...prev, newCat]);
+    }
+
+    setIsCategoryModalOpen(false);
+    setNewCategoryName('');
+    setNewCategoryDesc('');
+    setSyncToast(`Category "${newCat.name}" added to homepage taxonomy!`);
+    setTimeout(() => setSyncToast(null), 3500);
+  };
+
+  // Delete Category Handler
+  const handleDeleteCategory = async (id: number) => {
+    if (!confirm('Are you sure you want to remove this category?')) return;
+    try {
+      await fetch(`/api/admin/categories/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-test-role': 'admin' }
+      });
+    } catch (err) {
+      console.warn('Delete category error:', err);
+    }
+    setCategories(prev => prev.filter(c => c.id !== id));
+    setSyncToast('Category removed successfully.');
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  // Create Author Handler
+  const handleCreateAuthor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAuthorName.trim() || !newAuthorEmail.trim()) return;
+    const newAuth: Author = {
+      id: Date.now(),
+      name: newAuthorName.trim(),
+      email: newAuthorEmail.trim(),
+      role: newAuthorRole,
+      bio: newAuthorBio || 'Editorial contributor at Greenlight FSIA News.',
+      avatar_url: newAuthorAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=160&auto=format&fit=crop&q=80'
+    };
+
+    try {
+      const res = await fetch('/api/admin/authors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-role': 'admin'
+        },
+        body: JSON.stringify(newAuth)
+      });
+      if (res.ok) {
+        const json = await parseResponseJson(res);
+        if (json && json.data) {
+          setAuthors(prev => [...prev, json.data]);
+        } else {
+          setAuthors(prev => [...prev, newAuth]);
+        }
+      } else {
+        setAuthors(prev => [...prev, newAuth]);
+      }
+    } catch {
+      setAuthors(prev => [...prev, newAuth]);
+    }
+
+    setIsAuthorModalOpen(false);
+    setNewAuthorName('');
+    setNewAuthorEmail('');
+    setNewAuthorBio('');
+    setNewAuthorAvatar('');
+    setSyncToast(`Staff member "${newAuth.name}" added with role "${newAuth.role.toUpperCase()}"!`);
+    setTimeout(() => setSyncToast(null), 3500);
+  };
+
+  // Delete Author Handler
+  const handleDeleteAuthor = async (id: number) => {
+    if (!confirm('Are you sure you want to remove this staff profile?')) return;
+    try {
+      await fetch(`/api/admin/authors/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-test-role': 'admin' }
+      });
+    } catch (err) {
+      console.warn('Delete author error:', err);
+    }
+    setAuthors(prev => prev.filter(a => a.id !== id));
+    setSyncToast('Staff member removed.');
+    setTimeout(() => setSyncToast(null), 3000);
+  };
+
+  const filteredAdminArticles = articles.filter(art => {
+    const q = adminArticleSearch.toLowerCase().trim();
+    const matchesSearch = !q || 
+      art.title.toLowerCase().includes(q) ||
+      art.slug.toLowerCase().includes(q) ||
+      (art.author_name || '').toLowerCase().includes(q) ||
+      (art.category_name || '').toLowerCase().includes(q);
+    const matchesCategory = adminArticleCategoryFilter === 'all' || art.category_slug === adminArticleCategoryFilter || String(art.category_id) === adminArticleCategoryFilter;
+    const matchesStatus = adminArticleStatusFilter === 'all' || art.status === adminArticleStatusFilter;
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
   const filteredArticles = articles.filter(a => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -497,44 +700,86 @@ export default function App() {
           </div>
         )}
 
-        {/* Category Pill Navigation Tabs (in Public View) */}
+        {/* Category Pill Navigation Tabs (in Public View) - Responsive Auto-Adjusting */}
         {currentView !== 'admin' && (
-          <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/70 px-3 sm:px-6">
-            <div className="max-w-7xl mx-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-2 scroll-smooth text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCategorySlug('all');
-                  setSearchQuery('');
-                  if (currentView === 'article') setCurrentView('public');
-                }}
-                className={`min-h-[36px] px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
-                  activeCategorySlug === 'all' && !searchQuery
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-                }`}
-              >
-                Top Stories
-              </button>
-
-              {categories.map((cat) => (
+          <div className="border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-xs relative px-2 sm:px-4">
+            <div className="max-w-7xl mx-auto relative flex items-center">
+              {/* Left Scroll Button */}
+              {canScrollLeft && (
                 <button
-                  key={cat.id}
+                  type="button"
+                  onClick={() => handleScrollCategories('left')}
+                  className="hidden sm:flex absolute left-0 z-20 w-8 h-8 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 items-center justify-center text-slate-700 dark:text-slate-200 hover:text-emerald-600 hover:border-emerald-500 active:scale-95 transition-all"
+                  aria-label="Scroll categories left"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Edge Gradient Mask for Left Scroll */}
+              {canScrollLeft && (
+                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-slate-50 dark:from-slate-900 to-transparent z-10" />
+              )}
+
+              {/* Scrollable Category Track */}
+              <div
+                ref={categoryScrollRef}
+                onScroll={checkCategoryScroll}
+                className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-2 px-1 scroll-smooth text-xs sm:text-sm font-semibold"
+              >
+                <button
                   type="button"
                   onClick={() => {
-                    setActiveCategorySlug(cat.slug);
+                    setActiveCategorySlug('all');
                     setSearchQuery('');
                     if (currentView === 'article') setCurrentView('public');
                   }}
-                  className={`min-h-[36px] px-3.5 py-1.5 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
-                    activeCategorySlug === cat.slug && !searchQuery
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                  className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-1.5 ${
+                    activeCategorySlug === 'all' && !searchQuery
+                      ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
                   }`}
                 >
-                  {cat.name}
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Top Stories</span>
                 </button>
-              ))}
+
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveCategorySlug(cat.slug);
+                      setSearchQuery('');
+                      if (currentView === 'article') setCurrentView('public');
+                    }}
+                    className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
+                      activeCategorySlug === cat.slug && !searchQuery
+                        ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Edge Gradient Mask for Right Scroll */}
+              {canScrollRight && (
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-slate-50 dark:from-slate-900 to-transparent z-10" />
+              )}
+
+              {/* Right Scroll Button */}
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => handleScrollCategories('right')}
+                  className="hidden sm:flex absolute right-0 z-20 w-8 h-8 rounded-full bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700 items-center justify-center text-slate-700 dark:text-slate-200 hover:text-emerald-600 hover:border-emerald-500 active:scale-95 transition-all"
+                  aria-label="Scroll categories right"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -855,87 +1100,453 @@ export default function App() {
 
         {/* VIEW 3: ADMIN CMS DASHBOARD */}
         {currentView === 'admin' && (
-          <div className="space-y-8">
-            {/* Admin Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2.5">
-                  <Shield className="w-6 h-6 text-emerald-600" />
-                  <span>Greenlight Editorial & SEO Admin CMS</span>
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Connected property: <strong className="font-mono text-slate-800 dark:text-slate-200">sc-domain:greenlight.fsia.in</strong>
-                </p>
+          <div className="space-y-6">
+            {/* Admin Header with Easy Guidance & Real-time Live Status */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Live Editorial CMS</span>
+                    </span>
+                    <span className="text-xs text-slate-500 font-mono">
+                      sc-domain:greenlight.fsia.in
+                    </span>
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Shield className="w-6 h-6 text-emerald-600 shrink-0" />
+                    <span>Greenlight Editorial & SEO Command Center</span>
+                  </h1>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                    Visual publishing suite designed for editors and correspondents. Manage articles, Wikipedia-style infoboxes, homepage taxonomy, and Google Search Console performance.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleSyncLiveGreenlight}
+                    disabled={isSyncingLive}
+                    className="px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all flex items-center gap-2 shadow-2xs"
+                    title="Pull latest live articles from greenlight.fsia.in"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncingLive ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingLive ? 'Syncing...' : 'Sync Live Data'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingArticle(null);
+                      setIsArticleModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all flex items-center gap-2 shadow-sm active:scale-95"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Write New Article</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Sub-Navigation Tabs */}
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-semibold overflow-x-auto no-scrollbar max-w-full">
+              {/* Sub-Navigation Tabs - Auto Adjusting for Mobile/Tablet/PC */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold gap-1.5 mt-6">
                 <button
                   type="button"
-                  onClick={() => setAdminTab('gsc')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
-                    adminTab === 'gsc'
+                  onClick={() => setAdminTab('articles')}
+                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
+                    adminTab === 'articles'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>GSC Analytics</span>
+                  <FileText className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">Stories ({articles.length})</span>
+                    <span className="hidden sm:inline">Articles & Stories ({articles.length})</span>
+                  </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setAdminTab('articles')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
-                    adminTab === 'articles'
+                  onClick={() => setAdminTab('gsc')}
+                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
+                    adminTab === 'gsc'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Articles ({articles.length})</span>
+                  <Activity className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">SEO / GSC</span>
+                    <span className="hidden sm:inline">SEO & Search Console</span>
+                  </span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setAdminTab('categories')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
+                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
                     adminTab === 'categories'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Categories & Order</span>
+                  <Layers className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">Sections ({categories.length})</span>
+                    <span className="hidden sm:inline">Categories ({categories.length})</span>
+                  </span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setAdminTab('authors')}
-                  className={`min-h-[40px] px-3.5 py-2 rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 shrink-0 ${
+                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
                     adminTab === 'authors'
                       ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Authors & Roles</span>
+                  <Users className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">Staff ({authors.length})</span>
+                    <span className="hidden sm:inline">Editorial Staff ({authors.length})</span>
+                  </span>
                 </button>
               </div>
             </div>
 
-            {/* TAB 1: GOOGLE SEARCH CONSOLE ANALYTICS & RANK DROPS */}
+            {/* TAB 1: ARTICLES MANAGEMENT */}
+            {adminTab === 'articles' && (
+              <div className="space-y-5">
+                {/* Search & Filter Toolbar for Non-tech Editors */}
+                <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xs">
+                  {/* Search Input */}
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={adminArticleSearch}
+                      onChange={(e) => setAdminArticleSearch(e.target.value)}
+                      placeholder="Search articles by title, author, keyword, or slug..."
+                      className="w-full text-xs pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                    {adminArticleSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category & Status Filter with Responsive View Switcher */}
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                    <select
+                      value={adminArticleCategoryFilter}
+                      onChange={(e) => setAdminArticleCategoryFilter(e.target.value)}
+                      className="flex-1 sm:flex-initial text-xs px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500 font-medium"
+                    >
+                      <option value="all">All Categories ({articles.length})</option>
+                      {categories.map(c => (
+                        <option key={c.id} value={c.slug}>{c.name}</option>
+                      ))}
+                    </select>
+
+                    {/* Status Filter */}
+                    <select
+                      value={adminArticleStatusFilter}
+                      onChange={(e) => setAdminArticleStatusFilter(e.target.value)}
+                      className="flex-1 sm:flex-initial text-xs px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500 font-medium"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="published">Published</option>
+                      <option value="draft">Drafts</option>
+                    </select>
+
+                    {/* View Switcher (Cards vs Table) */}
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleViewMode('cards')}
+                        className={`p-2 rounded-lg text-xs transition-colors flex items-center gap-1 ${
+                          adminArticleViewMode === 'cards'
+                            ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-2xs font-bold'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        title="Visual Cards View"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                        <span className="hidden sm:inline text-[11px]">Cards</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleViewMode('table')}
+                        className={`p-2 rounded-lg text-xs transition-colors flex items-center gap-1 ${
+                          adminArticleViewMode === 'table'
+                            ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-2xs font-bold'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        title="Compact Table View"
+                      >
+                        <List className="w-4 h-4" />
+                        <span className="hidden sm:inline text-[11px]">Table</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Results count & status */}
+                <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+                  <span>
+                    Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
+                  </span>
+                  {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminArticleSearch('');
+                        setAdminArticleCategoryFilter('all');
+                        setAdminArticleStatusFilter('all');
+                      }}
+                      className="text-emerald-600 font-semibold hover:underline"
+                    >
+                      Reset filters
+                    </button>
+                  )}
+                </div>
+
+                {/* CARDS VIEW */}
+                {adminArticleViewMode === 'cards' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredAdminArticles.map((art) => (
+                      <div
+                        key={art.id}
+                        className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                      >
+                        {/* Cover Image & Category Badge */}
+                        <div className="relative aspect-[16/9] bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                          <img
+                            src={art.featured_image}
+                            alt={art.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 text-white backdrop-blur-xs">
+                              {art.category_name}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              art.status === 'published'
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-amber-500 text-white'
+                            }`}>
+                              {art.status}
+                            </span>
+                          </div>
+
+                          {art.infobox && art.infobox.length > 0 && (
+                            <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-slate-950/80 text-emerald-400 backdrop-blur-xs">
+                              {art.infobox.length} Infobox Facts
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Card Body */}
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className="text-sm font-bold font-serif text-slate-900 dark:text-slate-100 line-clamp-2 mb-1.5 leading-snug group-hover:text-emerald-600 transition-colors">
+                              {art.title}
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-3">
+                              {art.excerpt || 'Editorial feature article published on Greenlight FSIA.'}
+                            </p>
+                          </div>
+
+                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                              ✍️ {art.author_name}
+                            </span>
+                            <span className="font-mono">
+                              {art.read_time_minutes || 4} min read
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Card Actions Toolbar */}
+                        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectArticle(art.slug)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+                              title="Preview in public reader"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-slate-500" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicateArticle(art)}
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
+                              title="Duplicate as new draft template"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-slate-500" />
+                              <span>Clone</span>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingArticle(art);
+                                setIsArticleModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1 shadow-2xs"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteArticle(art.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                              title="Delete article"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* TABLE VIEW */}
+                {adminArticleViewMode === 'table' && (
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                          <tr>
+                            <th className="py-3.5 px-4">Title & Slug</th>
+                            <th className="py-3.5 px-4">Category</th>
+                            <th className="py-3.5 px-4">Author</th>
+                            <th className="py-3.5 px-4">SEO Snippet</th>
+                            <th className="py-3.5 px-4">Infobox Facts</th>
+                            <th className="py-3.5 px-4">Status</th>
+                            <th className="py-3.5 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                          {filteredAdminArticles.map((art) => (
+                            <tr key={art.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                              <td className="py-3.5 px-4 max-w-sm">
+                                <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                                  {art.title}
+                                </div>
+                                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                  /{art.slug}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">
+                                  {art.category_name}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
+                                {art.author_name}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                {art.meta_title ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
+                                    <Check className="w-3 h-3" />
+                                    <span>Optimized</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]">
+                                    Default
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                  {art.infobox?.length || 0} fields
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  art.status === 'published' 
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {art.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectArticle(art.slug)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                    title="View in reader"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDuplicateArticle(art)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                    title="Clone article"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingArticle(art);
+                                      setIsArticleModalOpen(true);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-emerald-600"
+                                    title="Edit article"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteArticle(art.id)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600"
+                                    title="Delete article"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: GOOGLE SEARCH CONSOLE ANALYTICS & RANK DROPS */}
             {adminTab === 'gsc' && (
-              <div className="space-y-8">
+              <div className="space-y-6">
                 {/* Sync Action Banner */}
-                <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="bg-slate-900 text-white rounded-3xl p-6 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
                   <div>
                     <h3 className="text-sm font-bold flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-emerald-400" />
-                      <span>Search Console Archiving Engine</span>
+                      <span>Google Search Console Archiving & Intelligence</span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Cron scheduled at 02:00 UTC daily (`gscArchiverJob.js`). You can also manually pull the latest dimensions now.
+                    <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                      Monitors impressions, CTR, average SERP rankings, and tracks 7-day algorithmic drops for verified Greenlight property.
                     </p>
                   </div>
 
@@ -949,11 +1560,39 @@ export default function App() {
                       type="button"
                       onClick={handleTriggerGscSync}
                       disabled={isSyncingGsc}
-                      className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"
+                      className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50 shadow-xs"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGsc ? 'animate-spin' : ''}`} />
-                      <span>{isSyncingGsc ? 'Syncing...' : 'Trigger GSC Sync'}</span>
+                      <span>{isSyncingGsc ? 'Syncing...' : 'Sync Search Console'}</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Plain-English SEO Help Guide for Non-Tech Editors */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+                    <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 mb-1">👆 Clicks</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Actual readers who clicked on a Greenlight link on Google.
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/40">
+                    <div className="text-xs font-bold text-blue-800 dark:text-blue-300 mb-1">👀 Impressions</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      How many times your story appeared on someone&apos;s search result page.
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40">
+                    <div className="text-xs font-bold text-purple-800 dark:text-purple-300 mb-1">🎯 Click-Through Rate (CTR)</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Percentage of viewers who clicked (Higher CTR = more attractive headline).
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40">
+                    <div className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-1">🏆 Average Position</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Google search rank (1 to 10 is on Google Page 1).
+                    </div>
                   </div>
                 </div>
 
@@ -965,176 +1604,95 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB 2: ARTICLES MANAGEMENT */}
-            {adminTab === 'articles' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      Editorial Articles & Infobox Registry
-                    </h2>
-                    <p className="text-xs text-slate-500">Manage headlines, body text, and Wikipedia Infobox metadata</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingArticle(null);
-                      setIsArticleModalOpen(true);
-                    }}
-                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl flex items-center gap-2 shadow-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Article</span>
-                  </button>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
-                      <tr>
-                        <th className="py-3.5 px-4">Title & Slug</th>
-                        <th className="py-3.5 px-4">Category</th>
-                        <th className="py-3.5 px-4">Author</th>
-                        <th className="py-3.5 px-4">SEO Tags</th>
-                        <th className="py-3.5 px-4">Infobox Fields</th>
-                        <th className="py-3.5 px-4">Status</th>
-                        <th className="py-3.5 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {articles.map((art) => (
-                        <tr key={art.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                          <td className="py-3.5 px-4 max-w-sm">
-                            <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                              {art.title}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                              /{art.slug}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">
-                              {art.category_name}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
-                            {art.author_name}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {art.meta_title ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
-                                <Search className="w-3 h-3" />
-                                <span>Optimized</span>
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]">
-                                Default
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                              {art.infobox?.length || 0} keys
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              art.status === 'published' 
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {art.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleSelectArticle(art.slug)}
-                                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                title="View in reader"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingArticle(art);
-                                  setIsArticleModalOpen(true);
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-emerald-600"
-                                title="Edit article"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteArticle(art.id)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600"
-                                title="Delete article"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             {/* TAB 3: CATEGORIES & HOMEPAGE DISPLAY ORDER */}
             {adminTab === 'categories' && (
               <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                    Category Sections & Homepage Display Order
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Reorder homepage category rows using the up/down controllers. The frontend dynamically synchronizes order.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-emerald-600" />
+                      <span>Category Sections & Homepage Display Order</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Reorder homepage sections using the Move Up / Move Down buttons. Changes reflect instantly on the public website.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl flex items-center gap-2 shadow-xs"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>Add New Category</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {categories.map((cat, idx) => (
-                    <div
-                      key={cat.id}
-                      className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-mono font-bold text-slate-700 dark:text-slate-300">
-                          #{cat.display_order}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {cat.name}
-                          </h3>
-                          <p className="text-xs text-slate-400">/{cat.slug}</p>
-                        </div>
-                      </div>
+                  {categories.map((cat, idx) => {
+                    const count = articles.filter(a => a.category_slug === cat.slug || a.category_id === cat.id).length;
+                    return (
+                      <div
+                        key={cat.id}
+                        className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-xs"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-mono font-bold text-sm">
+                              #{cat.display_order}
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <span>{cat.name}</span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono font-normal">
+                                  {count} articles
+                                </span>
+                              </h3>
+                              <p className="text-xs text-slate-400 font-mono mt-0.5">/{cat.slug}</p>
+                            </div>
+                          </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleCategoryReorder(cat.id, 'up')}
-                          disabled={idx === 0}
-                          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs font-bold hover:bg-slate-200 disabled:opacity-30"
-                        >
-                          ▲ Move Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCategoryReorder(cat.id, 'down')}
-                          disabled={idx === categories.length - 1}
-                          className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-xs font-bold hover:bg-slate-200 disabled:opacity-30"
-                        >
-                          ▼ Move Down
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                            title="Delete category"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                          {cat.description || 'Homepage editorial section category.'}
+                        </p>
+
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-400">
+                            Position: <strong>#{idx + 1}</strong> on homepage
+                          </span>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleCategoryReorder(cat.id, 'up')}
+                              disabled={idx === 0}
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                            >
+                              ▲ Move Up
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCategoryReorder(cat.id, 'down')}
+                              disabled={idx === categories.length - 1}
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition-colors"
+                            >
+                              ▼ Move Down
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1142,46 +1700,85 @@ export default function App() {
             {/* TAB 4: AUTHORS & RBAC ROLES */}
             {adminTab === 'authors' && (
               <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                    Editorial Staff & Role-Based Access (RBAC)
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Enforces JWT authentication & RBAC roles: `admin`, `editor`, and `author`
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-emerald-600" />
+                      <span>Editorial Staff & Role Permissions</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Assign roles to newsroom correspondents: <strong>Admin</strong> (Full access), <strong>Editor</strong> (Publish & SEO), or <strong>Author</strong> (Draft creation).
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAuthorModalOpen(true)}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl flex items-center gap-2 shadow-xs"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>Add Staff Member</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  {authors.map((auth) => (
-                    <div
-                      key={auth.id}
-                      className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between"
-                    >
-                      <div className="flex items-center gap-3 mb-4">
-                        <img
-                          src={auth.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'}
-                          alt={auth.name}
-                          className="w-12 h-12 rounded-full object-cover border border-slate-200"
-                        />
+                  {authors.map((auth) => {
+                    const authorArticleCount = articles.filter(a => a.author_name === auth.name || a.author_id === auth.id).length;
+                    return (
+                      <div
+                        key={auth.id}
+                        className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between"
+                      >
                         <div>
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {auth.name}
-                          </h3>
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 mt-1">
-                            {auth.role}
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={auth.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80'}
+                                alt={auth.name}
+                                className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-slate-700 shadow-2xs"
+                              />
+                              <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                  {auth.name}
+                                </h3>
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase mt-1 ${
+                                  auth.role === 'admin'
+                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                    : auth.role === 'editor'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                }`}>
+                                  {auth.role}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAuthor(auth.id)}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                              title="Delete staff profile"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-3">
+                            {auth.bio || 'Verified correspondent for Greenlight News.'}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                          <span className="font-mono text-slate-400 truncate max-w-[130px]">
+                            {auth.email}
+                          </span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {authorArticleCount} Stories
                           </span>
                         </div>
                       </div>
-
-                      <p className="text-xs text-slate-500 mb-4 line-clamp-3">
-                        {auth.bio || 'Verified correspondent for Greenlight News.'}
-                      </p>
-
-                      <div className="text-[11px] font-mono text-slate-400 pt-3 border-t border-slate-100 dark:border-slate-800">
-                        {auth.email}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1201,6 +1798,171 @@ export default function App() {
         categories={categories}
         authors={authors}
       />
+
+      {/* Non-Tech Friendly Category Creation Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center">
+                  <FolderPlus className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Add New Category Section</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="pt-4 space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="e.g. Technology & AI, Luxury Lifestyle, Conclaves"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Short Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={newCategoryDesc}
+                  onChange={(e) => setNewCategoryDesc(e.target.value)}
+                  placeholder="Brief summary of stories in this category..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-colors"
+                >
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Non-Tech Friendly Author Creation Modal */}
+      {isAuthorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Add Newsroom Staff Member</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAuthorModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAuthor} className="pt-4 space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAuthorName}
+                  onChange={(e) => setNewAuthorName(e.target.value)}
+                  placeholder="e.g. Priya Nair, Dr. Rajesh Sharma"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Official Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newAuthorEmail}
+                  onChange={(e) => setNewAuthorEmail(e.target.value)}
+                  placeholder="e.g. editor@greenlight.fsia.in"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Role & Permissions
+                </label>
+                <select
+                  value={newAuthorRole}
+                  onChange={(e) => setNewAuthorRole(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                >
+                  <option value="admin">Administrator (Full Access & SEO Management)</option>
+                  <option value="editor">Senior Editor (Publishing & Editing)</option>
+                  <option value="author">Staff Writer / Correspondent (Drafts)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Short Bio
+                </label>
+                <textarea
+                  rows={2}
+                  value={newAuthorBio}
+                  onChange={(e) => setNewAuthorBio(e.target.value)}
+                  placeholder="Covering national conclaves and verified corporate achievements..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAuthorModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-colors"
+                >
+                  Save Team Member
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-10 px-4 sm:px-6 text-xs text-slate-500">

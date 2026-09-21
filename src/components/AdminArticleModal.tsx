@@ -25,11 +25,13 @@ import {
   Share2,
   ExternalLink,
   Eye,
-  RefreshCw
+  RefreshCw,
+  Code2
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
 import { WysiwygEditor } from './admin/WysiwygEditor';
+import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
 
 export interface AdminArticleModalProps {
   isOpen: boolean;
@@ -57,7 +59,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   categories = [],
   authors = []
 }) => {
-  const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox'>('content');
+  const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>('content');
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
@@ -256,7 +258,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 
         {/* Responsive Auto-Adjusting Step Navigation Tabs */}
         <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/60 p-2 sm:p-2.5">
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 max-w-2xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 max-w-4xl mx-auto">
             <button
               type="button"
               onClick={() => setModalTab('content')}
@@ -269,8 +271,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               <BookOpen className="w-4 h-4 shrink-0" />
               <span className="truncate">
                 <span className="sm:hidden">1. Content</span>
-                <span className="hidden sm:inline md:hidden">1. Content & Story</span>
-                <span className="hidden md:inline">1. Story & Main Content</span>
+                <span className="hidden sm:inline md:hidden">1. Story Content</span>
+                <span className="hidden md:inline">1. Story &amp; Content</span>
               </span>
             </button>
 
@@ -287,7 +289,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               <span className="truncate">
                 <span className="sm:hidden">2. SEO &amp; OG</span>
                 <span className="hidden sm:inline md:hidden">2. SEO &amp; Social</span>
-                <span className="hidden md:inline">2. Google SEO &amp; Open Graph</span>
+                <span className="hidden md:inline">2. Google SEO &amp; OG</span>
               </span>
             </button>
 
@@ -302,14 +304,31 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
             >
               <Layers className="w-4 h-4 shrink-0" />
               <span className="truncate flex items-center gap-1">
-                <span className="sm:hidden">3. Factsheet</span>
+                <span className="sm:hidden">3. Facts</span>
                 <span className="hidden sm:inline md:hidden">3. Factsheet</span>
-                <span className="hidden md:inline">3. Wikipedia Factsheet</span>
+                <span className="hidden md:inline">3. Wiki Factsheet</span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                   modalTab === 'infobox' ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                 }`}>
                   {infobox.length}
                 </span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModalTab('php')}
+              className={`min-h-[44px] px-2 sm:px-3 py-2 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs font-bold ${
+                modalTab === 'php'
+                  ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Code2 className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                <span className="sm:hidden">4. PHP</span>
+                <span className="hidden sm:inline md:hidden">4. PHP Export</span>
+                <span className="hidden md:inline">4. PHP Code Export</span>
               </span>
             </button>
           </div>
@@ -922,6 +941,51 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               />
             </div>
           )}
+
+          {/* TAB 4: PHP CODE FILE GENERATOR FOR THIS STORY */}
+          {modalTab === 'php' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 flex items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Code2 className="w-4 h-4" />
+                    <span>Story PHP Code Generator &amp; Direct Website Drop-in</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Generates the production-ready PHP file populated with this article&apos;s headlines, Open Graph images, schema markup, and Wikipedia Factsheet.
+                  </p>
+                </div>
+              </div>
+
+              <PhpCodeGenerator
+                articles={[{
+                  id: article?.id || 1,
+                  title: title || 'New Story Headline',
+                  slug: previewSlug,
+                  excerpt: excerpt || 'Article summary',
+                  content: content || '<p>Story content</p>',
+                  featured_image: featuredImage,
+                  og_image: ogImage || featuredImage,
+                  meta_title: metaTitle || title,
+                  meta_description: metaDescription || excerpt,
+                  category_id: Number(categoryId),
+                  category_name: categories.find(c => c.id === Number(categoryId))?.name || 'News',
+                  category_slug: categories.find(c => c.id === Number(categoryId))?.slug || 'news',
+                  author_id: Number(authorId),
+                  author_name: authors.find(a => a.id === Number(authorId))?.name || 'Editorial Board',
+                  status,
+                  is_featured: isFeatured,
+                  views_count: article?.views_count || 150,
+                  reading_time: Math.max(1, Math.ceil((content.replace(/<[^>]+>/g, '').split(/\s+/).length) / 200)),
+                  created_at: article?.created_at || new Date().toISOString().split('T')[0],
+                  published_at: article?.published_at || new Date().toISOString().split('T')[0],
+                  infobox
+                }]}
+                categories={categories}
+                authors={authors}
+              />
+            </div>
+          )}
         </form>
 
         {/* Modal Footer with Step Navigator */}
@@ -938,7 +1002,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
             {modalTab !== 'content' && (
               <button
                 type="button"
-                onClick={() => setModalTab(modalTab === 'infobox' ? 'seo' : 'content')}
+                onClick={() => setModalTab(modalTab === 'php' ? 'infobox' : modalTab === 'infobox' ? 'seo' : 'content')}
                 className="min-h-[40px] px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -967,6 +1031,17 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                 className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1.5 active:scale-95"
               >
                 <span>Next: Factsheet</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {modalTab === 'infobox' && (
+              <button
+                type="button"
+                onClick={() => setModalTab('php')}
+                className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1.5 active:scale-95"
+              >
+                <span>Next: PHP Export</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}

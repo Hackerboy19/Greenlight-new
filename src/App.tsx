@@ -42,7 +42,8 @@ import {
   HelpCircle,
   Filter,
   CheckCircle2,
-  X
+  X,
+  Code2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -58,6 +59,7 @@ import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
 import { AdminArticleModal } from './components/AdminArticleModal';
 import { GreenLightLogo } from './components/GreenLightLogo';
+import { PhpCodeGenerator } from './components/admin/PhpCodeGenerator';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
 
@@ -81,7 +83,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Admin CMS Sub-tabs & Filter states
-  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors'>('articles');
+  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php'>('articles');
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [adminArticleSearch, setAdminArticleSearch] = useState('');
@@ -1150,7 +1152,7 @@ export default function App() {
               </div>
 
               {/* Sub-Navigation Tabs - Auto Adjusting for Mobile/Tablet/PC */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold gap-1.5 mt-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold gap-1.5 mt-6">
                 <button
                   type="button"
                   onClick={() => setAdminTab('articles')}
@@ -1212,6 +1214,22 @@ export default function App() {
                   <span className="truncate">
                     <span className="sm:hidden">Staff ({authors.length})</span>
                     <span className="hidden sm:inline">Editorial Staff ({authors.length})</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAdminTab('php')}
+                  className={`col-span-2 sm:col-span-1 min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
+                    adminTab === 'php'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Code2 className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">PHP Code</span>
+                    <span className="hidden sm:inline">PHP Code Generator</span>
                   </span>
                 </button>
               </div>
@@ -1781,6 +1799,15 @@ export default function App() {
                   })}
                 </div>
               </div>
+            )}
+
+            {/* TAB 5: PHP CODE FILE GENERATOR FOR DEVELOPERS */}
+            {adminTab === 'php' && (
+              <PhpCodeGenerator
+                articles={articles}
+                categories={categories}
+                authors={authors}
+              />
             )}
           </div>
         )}

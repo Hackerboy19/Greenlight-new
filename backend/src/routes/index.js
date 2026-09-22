@@ -62,6 +62,8 @@ router.post('/articles', articleController.createArticle);
 router.get('/articles/:id', articleController.getArticleById);
 router.put('/articles/:id', articleController.updateArticle);
 router.delete('/articles/:id', articleController.deleteArticle);
+router.post('/articles/:id/quick-fix-seo', articleController.quickFixSeo);
+router.post('/seo/quick-fix', articleController.quickFixSeo);
 
 router.get('/categories', categoryController.getAllCategories);
 router.get('/authors', authorController.getAllAuthors);

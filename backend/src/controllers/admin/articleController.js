@@ -6,6 +6,7 @@
 import { query, transaction, memoryStore } from '../../config/database.js';
 import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer.js';
 import { AppError } from '../../middlewares/errorHandler.js';
+import { generateArticleSeo } from '../../services/geminiSeoService.js';
 
 function generateSlug(text) {
   return text
@@ -303,10 +304,74 @@ export async function deleteArticle(req, res, next) {
   }
 }
 
+/**
+ * Quick Fix SEO with Gemini 3.8 Flash
+ * Automatically analyzes article content to generate missing meta_title,
+ * meta_description, and social open graph attributes.
+ */
+export async function quickFixSeo(req, res, next) {
+  try {
+    const articlePayload = req.body.article || req.body || {};
+    const articleId = req.params.id ? parseInt(req.params.id, 10) : (articlePayload.id ? parseInt(articlePayload.id, 10) : null);
+    const saveImmediately = req.body.saveImmediately !== false;
+
+    let targetArticle = { ...articlePayload };
+    let articleIndex = -1;
+
+    if (articleId) {
+      articleIndex = memoryStore.articles.findIndex(a => a.id === articleId);
+      if (articleIndex !== -1) {
+        targetArticle = { ...memoryStore.articles[articleIndex], ...articlePayload };
+      }
+    }
+
+    if (!targetArticle.title && !targetArticle.content && !targetArticle.excerpt) {
+      throw new AppError('Article content or title is required to generate SEO metadata', 400);
+    }
+
+    // Call Gemini 3.8 Flash SEO generator
+    const generated = await generateArticleSeo(targetArticle);
+
+    // Save directly to memoryStore if the article exists in the database
+    if (saveImmediately && articleIndex !== -1) {
+      const updatedArticle = {
+        ...memoryStore.articles[articleIndex],
+        meta_title: generated.meta_title,
+        meta_description: generated.meta_description,
+        og_image: generated.og_image || memoryStore.articles[articleIndex].og_image || memoryStore.articles[articleIndex].featured_image,
+        updated_at: new Date().toISOString()
+      };
+      memoryStore.articles[articleIndex] = updatedArticle;
+
+      return res.status(200).json({
+        success: true,
+        message: 'SEO metadata generated with Gemini and saved successfully.',
+        data: updatedArticle,
+        generated
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'SEO metadata generated with Gemini.',
+      data: {
+        ...targetArticle,
+        meta_title: generated.meta_title,
+        meta_description: generated.meta_description,
+        og_image: generated.og_image
+      },
+      generated
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export default {
   getAllArticles,
   getArticleById,
   createArticle,
   updateArticle,
-  deleteArticle
+  deleteArticle,
+  quickFixSeo
 };

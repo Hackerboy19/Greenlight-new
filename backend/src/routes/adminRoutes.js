@@ -27,6 +27,8 @@ router.get('/articles/:id', authorizeRole('author'), articleController.getArticl
 router.post('/articles', authorizeRole('author'), articleController.createArticle);
 router.put('/articles/:id', authorizeRole('editor'), articleController.updateArticle);
 router.delete('/articles/:id', authorizeRole('admin'), articleController.deleteArticle);
+router.post('/articles/:id/quick-fix-seo', authorizeRole('author'), articleController.quickFixSeo);
+router.post('/seo/quick-fix', authorizeRole('author'), articleController.quickFixSeo);
 
 /* ==========================================================================
    Category Management & Homepage Reordering (Editor, Admin)

@@ -26,12 +26,14 @@ import {
   ExternalLink,
   Eye,
   RefreshCw,
-  Code2
+  Code2,
+  Loader2
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
 import { WysiwygEditor } from './admin/WysiwygEditor';
 import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
+import { calculateSeoHealth, SEO_STATUS_CONFIG } from '../utils/seoHealth';
 
 export interface AdminArticleModalProps {
   isOpen: boolean;
@@ -40,6 +42,7 @@ export interface AdminArticleModalProps {
   article?: Article | null;
   categories: Category[];
   authors: Author[];
+  initialTab?: 'content' | 'seo' | 'infobox' | 'php';
 }
 
 const STOCK_IMAGE_PRESETS = [
@@ -57,9 +60,10 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   onSave,
   article,
   categories = [],
-  authors = []
+  authors = [],
+  initialTab = 'content'
 }) => {
-  const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>('content');
+  const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>(initialTab);
   const [title, setTitle] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
@@ -76,6 +80,15 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [infobox, setInfobox] = useState<InfoboxItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAiGeneratingSeo, setIsAiGeneratingSeo] = useState(false);
+  const [aiSeoSuccess, setAiSeoSuccess] = useState(false);
+  const [aiSeoError, setAiSeoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setModalTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   useEffect(() => {
     const defaultCatId = categories[0]?.id || 1;
@@ -86,9 +99,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setExcerpt(article.excerpt || '');
       setContent(article.content || '');
       setFeaturedImage(article.featured_image || '');
-      setMetaTitle(article.meta_title || article.title || '');
-      setMetaDescription(article.meta_description || article.excerpt || '');
-      setOgImage(article.og_image || article.featured_image || '');
+      setMetaTitle(article.meta_title ?? '');
+      setMetaDescription(article.meta_description ?? '');
+      setOgImage(article.og_image ?? '');
       setCategoryId(article.category_id || defaultCatId);
       setAuthorId(article.author_id || defaultAuthId);
       setStatus(article.status || 'published');
@@ -140,6 +153,60 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
     }
   };
 
+  const handleModalQuickFixSeo = async () => {
+    if (isAiGeneratingSeo) return;
+    setIsAiGeneratingSeo(true);
+    setAiSeoError(null);
+    setAiSeoSuccess(false);
+
+    try {
+      const res = await fetch('/api/seo/quick-fix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-role': 'admin'
+        },
+        body: JSON.stringify({
+          article: {
+            title,
+            content,
+            excerpt,
+            featured_image: featuredImage,
+            category_name: categories.find(c => c.id === Number(categoryId))?.name,
+            meta_title: metaTitle,
+            meta_description: metaDescription,
+            og_image: ogImage
+          },
+          saveImmediately: false
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to generate SEO with Gemini');
+      }
+
+      const data = await res.json();
+      if (data.generated?.meta_title) {
+        setMetaTitle(data.generated.meta_title);
+      }
+      if (data.generated?.meta_description) {
+        setMetaDescription(data.generated.meta_description);
+      }
+      if (data.generated?.og_image && !ogImage.trim()) {
+        setOgImage(data.generated.og_image);
+      }
+
+      setAiSeoSuccess(true);
+      setTimeout(() => setAiSeoSuccess(false), 3500);
+    } catch (err: any) {
+      setAiSeoError(err.message || 'Generation failed');
+      setTimeout(() => setAiSeoError(null), 4000);
+    } finally {
+      setIsAiGeneratingSeo(false);
+    }
+  };
+
   // SEO Score calculation helpers
   const titleLength = metaTitle.length;
   const descLength = metaDescription.length;
@@ -161,6 +228,15 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 
   const titleStatus = getTitleStatus();
   const descStatus = getDescStatus();
+
+  // Real-time SEO Health evaluation
+  const liveHealth = calculateSeoHealth({
+    meta_title: metaTitle,
+    meta_description: metaDescription,
+    og_image: ogImage,
+    featured_image: featuredImage
+  });
+  const liveHealthConfig = SEO_STATUS_CONFIG[liveHealth.status];
 
   // Generated slug for snippet preview
   const previewSlug = article?.slug || (title ? title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').slice(0, 50) : 'editorial-headline-slug');
@@ -210,9 +286,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
         excerpt,
         content,
         featured_image: featuredImage,
-        meta_title: metaTitle.trim() || title,
-        meta_description: metaDescription.trim() || excerpt,
-        og_image: ogImage.trim() || featuredImage,
+        meta_title: metaTitle.trim(),
+        meta_description: metaDescription.trim(),
+        og_image: ogImage.trim(),
         category_id: Number(categoryId) || 1,
         author_id: Number(authorId) || 1,
         status,
@@ -286,10 +362,20 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
               }`}
             >
               <Search className="w-4 h-4 shrink-0" />
-              <span className="truncate">
-                <span className="sm:hidden">2. SEO &amp; OG</span>
-                <span className="hidden sm:inline md:hidden">2. SEO &amp; Social</span>
+              <span className="truncate flex items-center gap-1.5">
+                <span className="sm:hidden">2. SEO</span>
+                <span className="hidden sm:inline md:hidden">2. SEO &amp; OG</span>
                 <span className="hidden md:inline">2. Google SEO &amp; OG</span>
+                <span 
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    liveHealth.status === 'green'
+                      ? 'bg-emerald-400 ring-2 ring-emerald-500/30'
+                      : liveHealth.status === 'yellow'
+                      ? 'bg-amber-400 ring-2 ring-amber-500/30'
+                      : 'bg-rose-400 ring-2 ring-rose-500/30 animate-pulse'
+                  }`} 
+                  title={`SEO Health: ${liveHealthConfig.label} (${liveHealth.score}%)`}
+                />
               </span>
             </button>
 
@@ -543,26 +629,109 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                   </div>
                 </div>
 
+                {/* Real-time SEO Health Score Banner */}
+                <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-colors ${liveHealthConfig.badgeBg} ${liveHealthConfig.badgeBorder}`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-3 h-3 rounded-full ${liveHealthConfig.dotColor} shrink-0 animate-pulse`} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          SEO Health Score:
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-black ${liveHealthConfig.badgeBg} ${liveHealthConfig.badgeText} border ${liveHealthConfig.badgeBorder}`}>
+                          {liveHealth.score}% • {liveHealthConfig.label}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                        {liveHealth.passedCount}/3 critical tags populated ({liveHealth.score}% completeness)
+                        {liveHealth.missingKeys.length > 0 && (
+                          <span className="text-rose-600 dark:text-rose-400 font-medium">
+                            {' '}— Missing: {liveHealth.missingKeys.join(', ')}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-3 shrink-0">
+                    <button
+                      type="button"
+                      id="modal-quick-fix-seo-btn"
+                      onClick={handleModalQuickFixSeo}
+                      disabled={isAiGeneratingSeo}
+                      className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                      title="Automatically generate missing meta_title and meta_description using Gemini 3.8 Flash based on article content"
+                    >
+                      {isAiGeneratingSeo ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating with Gemini...</span>
+                        </>
+                      ) : aiSeoSuccess ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Generated!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Quick Fix with Gemini</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="w-full sm:w-36 flex flex-col gap-1 shrink-0">
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                        <span>Progress</span>
+                        <span>{liveHealth.passedCount}/3</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            liveHealth.status === 'green' ? 'bg-emerald-500' : liveHealth.status === 'yellow' ? 'bg-amber-500' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${liveHealth.score}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Readiness Score Bar */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
                   <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                    <span className="text-slate-500 font-medium">Meta Title:</span>
-                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${titleStatus.color}`}>
-                      {titleLength}/60 ({titleStatus.label})
+                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${liveHealth.checks[0]?.isPopulated ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      Meta Title:
                     </span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                    <span className="text-slate-500 font-medium">Meta Description:</span>
-                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${descStatus.color}`}>
-                      {descLength}/160 ({descStatus.label})
-                    </span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
-                    <span className="text-slate-500 font-medium">Open Graph Image:</span>
                     <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
-                      activeOgImage ? 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50' : 'text-amber-700 border-amber-200 bg-amber-50'
+                      liveHealth.checks[0]?.isPopulated ? titleStatus.color : 'text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/50 font-bold'
                     }`}>
-                      {activeOgImage ? 'Configured (1200x630)' : 'Missing (Default)'}
+                      {liveHealth.checks[0]?.isPopulated ? `${titleLength}/60 (${titleStatus.label})` : 'Missing (0 chars)'}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${liveHealth.checks[1]?.isPopulated ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      Meta Description:
+                    </span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
+                      liveHealth.checks[1]?.isPopulated ? descStatus.color : 'text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/50 font-bold'
+                    }`}>
+                      {liveHealth.checks[1]?.isPopulated ? `${descLength}/160 (${descStatus.label})` : 'Missing (0 chars)'}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${liveHealth.checks[2]?.isPopulated ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      Open Graph Image:
+                    </span>
+                    <span className={`font-mono text-[11px] px-2 py-0.5 rounded-full border ${
+                      liveHealth.checks[2]?.isPopulated 
+                        ? 'text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 font-semibold' 
+                        : 'text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/50 font-bold'
+                    }`}>
+                      {liveHealth.checks[2]?.isPopulated ? 'Configured (1200x630)' : 'Missing og:image'}
                     </span>
                   </div>
                 </div>

@@ -68,6 +68,8 @@ import { recordSocialClickEvent, SocialPlatform } from './data/socialShareData';
 import { AdminArticleModal } from './components/AdminArticleModal';
 import { GreenLightLogo } from './components/GreenLightLogo';
 import { PhpCodeGenerator } from './components/admin/PhpCodeGenerator';
+import { SeoHealthIndicator } from './components/admin/SeoHealthIndicator';
+import { calculateSeoHealth } from './utils/seoHealth';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
 
@@ -137,10 +139,12 @@ export default function App() {
   const [shareArticleTarget, setShareArticleTarget] = useState<Article | null>(null);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [modalInitialTab, setModalInitialTab] = useState<'content' | 'seo' | 'infobox' | 'php'>('content');
   const [adminArticleSearch, setAdminArticleSearch] = useState('');
   const [adminArticleCategoryFilter, setAdminArticleCategoryFilter] = useState('all');
   const [adminArticleStatusFilter, setAdminArticleStatusFilter] = useState('all');
-  const [adminArticleSort, setAdminArticleSort] = useState<'latest' | 'oldest' | 'title' | 'reading_time' | 'infobox'>('latest');
+  const [adminArticleSeoFilter, setAdminArticleSeoFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
+  const [adminArticleSort, setAdminArticleSort] = useState<'latest' | 'oldest' | 'title' | 'reading_time' | 'infobox' | 'seo_asc' | 'seo_desc'>('latest');
   const [adminArticleViewMode, setAdminArticleViewMode] = useState<'table' | 'cards'>('cards');
   const [adminCategorySearch, setAdminCategorySearch] = useState('');
   const [adminAuthorSearch, setAdminAuthorSearch] = useState('');
@@ -298,6 +302,14 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+
+    const handleSeoFixed = (e: any) => {
+      if (e.detail?.id) {
+        setArticles(prev => prev.map(a => a.id === e.detail.id ? { ...a, ...e.detail } as Article : a));
+      }
+    };
+    window.addEventListener('article-seo-fixed', handleSeoFixed);
+    return () => window.removeEventListener('article-seo-fixed', handleSeoFixed);
   }, []);
 
   // Handle article selection & fetch single article details
@@ -386,6 +398,16 @@ export default function App() {
     }
 
     await loadData();
+  };
+
+  // Quick Fix SEO handler (real-time UI update)
+  const handleQuickFixSeo = (updatedArticle: Partial<Article>) => {
+    if (updatedArticle.id) {
+      setArticles(prev => prev.map(a => a.id === updatedArticle.id ? { ...a, ...updatedArticle } as Article : a));
+      if (editingArticle && editingArticle.id === updatedArticle.id) {
+        setEditingArticle(prev => prev ? { ...prev, ...updatedArticle } : null);
+      }
+    }
   };
 
   // Admin Article Delete
@@ -626,17 +648,22 @@ export default function App() {
         URL.revokeObjectURL(url);
         setAdminExportToast('Articles catalog exported as JSON');
       } else {
-        const headers = ['ID', 'Title', 'Slug', 'Category', 'Author', 'Status', 'Reading Time (min)', 'Infobox Fields'];
-        const rows = articles.map(a => [
-          a.id,
-          `"${(a.title || '').replace(/"/g, '""')}"`,
-          `"${a.slug || ''}"`,
-          `"${(a.category_name || '').replace(/"/g, '""')}"`,
-          `"${(a.author_name || '').replace(/"/g, '""')}"`,
-          `"${a.status || 'published'}"`,
-          a.reading_time || 3,
-          a.infobox?.length || 0
-        ]);
+        const headers = ['ID', 'Title', 'Slug', 'Category', 'Author', 'Status', 'SEO Health Score', 'SEO Status', 'Reading Time (min)', 'Infobox Fields'];
+        const rows = articles.map(a => {
+          const health = calculateSeoHealth(a);
+          return [
+            a.id,
+            `"${(a.title || '').replace(/"/g, '""')}"`,
+            `"${a.slug || ''}"`,
+            `"${(a.category_name || '').replace(/"/g, '""')}"`,
+            `"${(a.author_name || '').replace(/"/g, '""')}"`,
+            `"${a.status || 'published'}"`,
+            `"${health.score}%"`,
+            `"${health.status.toUpperCase()}"`,
+            a.reading_time || 3,
+            a.infobox?.length || 0
+          ];
+        });
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -663,9 +690,16 @@ export default function App() {
         (art.category_name || '').toLowerCase().includes(q);
       const matchesCategory = adminArticleCategoryFilter === 'all' || art.category_slug === adminArticleCategoryFilter || String(art.category_id) === adminArticleCategoryFilter;
       const matchesStatus = adminArticleStatusFilter === 'all' || art.status === adminArticleStatusFilter;
-      return matchesSearch && matchesCategory && matchesStatus;
+      const matchesSeo = adminArticleSeoFilter === 'all' || calculateSeoHealth(art).status === adminArticleSeoFilter;
+      return matchesSearch && matchesCategory && matchesStatus && matchesSeo;
     })
     .sort((a, b) => {
+      if (adminArticleSort === 'seo_asc') {
+        return calculateSeoHealth(a).score - calculateSeoHealth(b).score;
+      }
+      if (adminArticleSort === 'seo_desc') {
+        return calculateSeoHealth(b).score - calculateSeoHealth(a).score;
+      }
       if (adminArticleSort === 'title') {
         return a.title.localeCompare(b.title);
       }
@@ -1418,6 +1452,7 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setEditingArticle(null);
+                      setModalInitialTab('content');
                       setIsArticleModalOpen(true);
                     }}
                     className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all flex items-center gap-2 shadow-sm active:scale-95"
@@ -1513,23 +1548,28 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Metric 4: Search & Social Index */}
+                {/* Metric 4: SEO Health Score */}
                 <div 
-                  onClick={() => setAdminTab('social')}
+                  onClick={() => setAdminTab('seo')}
                   className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Social Shares & CTR"
+                  title="Click to view SEO Health and Audit"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Audience & Shares</span>
-                    <span className="p-1.5 rounded-lg bg-sky-100/70 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400">
-                      <Share2 className="w-3.5 h-3.5" />
+                    <span className="font-semibold uppercase tracking-wider text-[10px]">SEO Health Avg</span>
+                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                      <Activity className="w-3.5 h-3.5" />
                     </span>
                   </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    Active
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif flex items-center gap-2">
+                    <span>
+                      {Math.round(articles.reduce((acc, a) => acc + calculateSeoHealth(a).score, 0) / (articles.length || 1))}%
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-sans font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      {articles.filter(a => calculateSeoHealth(a).status === 'green').length}/{articles.length} Healthy
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">GSC & CTR tracking</span>
+                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Meta & OG Image check</span>
                   </div>
                 </div>
               </div>
@@ -1685,6 +1725,8 @@ export default function App() {
                         <option value="latest">Sort: Latest</option>
                         <option value="oldest">Sort: Oldest</option>
                         <option value="title">Sort: Title A-Z</option>
+                        <option value="seo_asc">Sort: SEO Health (Lowest)</option>
+                        <option value="seo_desc">Sort: SEO Health (Highest)</option>
                         <option value="reading_time">Sort: Longest Read</option>
                         <option value="infobox">Sort: Most Infobox Facts</option>
                       </select>
@@ -1722,63 +1764,120 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Quick Status Filter Pills & Results count */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs px-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Quick Status Filter Pills & SEO Health Filter Pills */}
+                <div className="space-y-2.5 text-xs px-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleStatusFilter('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          adminArticleStatusFilter === 'all'
+                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        All Stories ({articles.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleStatusFilter('published')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          adminArticleStatusFilter === 'published'
+                            ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 border border-emerald-200/50'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Published ({articles.filter(a => a.status === 'published').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleStatusFilter('draft')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          adminArticleStatusFilter === 'draft'
+                            ? 'bg-amber-600 text-white shadow-2xs font-bold'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/50'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Drafts ({articles.filter(a => a.status !== 'published').length})
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <span>
+                        Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
+                      </span>
+                      {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all' || adminArticleSeoFilter !== 'all') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdminArticleSearch('');
+                            setAdminArticleCategoryFilter('all');
+                            setAdminArticleStatusFilter('all');
+                            setAdminArticleSeoFilter('all');
+                          }}
+                          className="text-emerald-600 font-semibold hover:underline"
+                        >
+                          Reset filters
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SEO Health Quick Filter Bar */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+                      SEO Health:
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setAdminArticleStatusFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                        adminArticleStatusFilter === 'all'
-                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
+                      onClick={() => setAdminArticleSeoFilter('all')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        adminArticleSeoFilter === 'all'
+                          ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 shadow-2xs'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                       }`}
                     >
-                      All Stories ({articles.length})
+                      All SEO ({articles.length})
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAdminArticleStatusFilter('published')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                        adminArticleStatusFilter === 'published'
-                          ? 'bg-emerald-600 text-white shadow-2xs font-bold'
-                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 border border-emerald-200/50'
+                      onClick={() => setAdminArticleSeoFilter('green')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
+                        adminArticleSeoFilter === 'green'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200/60 hover:bg-emerald-100/70'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Published ({articles.filter(a => a.status === 'published').length})
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span>Healthy ({articles.filter(a => calculateSeoHealth(a).status === 'green').length})</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAdminArticleStatusFilter('draft')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                        adminArticleStatusFilter === 'draft'
-                          ? 'bg-amber-600 text-white shadow-2xs font-bold'
-                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/50'
+                      onClick={() => setAdminArticleSeoFilter('yellow')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
+                        adminArticleSeoFilter === 'yellow'
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-bold'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/60 hover:bg-amber-100/70'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      Drafts ({articles.filter(a => a.status !== 'published').length})
+                      <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                      <span>Needs Review ({articles.filter(a => calculateSeoHealth(a).status === 'yellow').length})</span>
                     </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <span>
-                      Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
-                    </span>
-                    {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all') && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAdminArticleSearch('');
-                          setAdminArticleCategoryFilter('all');
-                          setAdminArticleStatusFilter('all');
-                        }}
-                        className="text-emerald-600 font-semibold hover:underline"
-                      >
-                        Reset filters
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAdminArticleSeoFilter('red')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
+                        adminArticleSeoFilter === 'red'
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs font-bold'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200/60 hover:bg-rose-100/70'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                      <span>Critical ({articles.filter(a => calculateSeoHealth(a).status === 'red').length})</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1808,6 +1907,20 @@ export default function App() {
                             }`}>
                               {art.status}
                             </span>
+                          </div>
+
+                          {/* SEO Health Indicator Badge (Top Right of Cover) */}
+                          <div className="absolute top-3 right-3 z-10">
+                            <SeoHealthIndicator 
+                              article={art} 
+                              variant="card" 
+                              onQuickFix={handleQuickFixSeo}
+                              onEditSeo={(targetArt) => {
+                                setEditingArticle(targetArt as Article);
+                                setModalInitialTab('seo');
+                                setIsArticleModalOpen(true);
+                              }}
+                            />
                           </div>
 
                           {art.infobox && art.infobox.length > 0 && (
@@ -1900,7 +2013,7 @@ export default function App() {
                             <th className="py-3.5 px-4">Title & Slug</th>
                             <th className="py-3.5 px-4">Category</th>
                             <th className="py-3.5 px-4">Author</th>
-                            <th className="py-3.5 px-4">SEO Snippet</th>
+                            <th className="py-3.5 px-4">SEO Health Score</th>
                             <th className="py-3.5 px-4">Infobox Facts</th>
                             <th className="py-3.5 px-4">Status</th>
                             <th className="py-3.5 px-4 text-right">Actions</th>
@@ -1928,16 +2041,16 @@ export default function App() {
                                 {art.author_name}
                               </td>
                               <td className="py-3.5 px-4">
-                                {art.meta_title ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
-                                    <Check className="w-3 h-3" />
-                                    <span>Optimized</span>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px]">
-                                    Default
-                                  </span>
-                                )}
+                                <SeoHealthIndicator 
+                                  article={art} 
+                                  variant="table" 
+                                  onQuickFix={handleQuickFixSeo}
+                                  onEditSeo={(targetArt) => {
+                                    setEditingArticle(targetArt as Article);
+                                    setModalInitialTab('seo');
+                                    setIsArticleModalOpen(true);
+                                  }} 
+                                />
                               </td>
                               <td className="py-3.5 px-4">
                                 <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
@@ -2410,11 +2523,13 @@ export default function App() {
         onClose={() => {
           setIsArticleModalOpen(false);
           setEditingArticle(null);
+          setModalInitialTab('content');
         }}
         onSave={handleSaveArticle}
         article={editingArticle}
         categories={categories}
         authors={authors}
+        initialTab={modalInitialTab}
       />
 
       {/* Public Multi-Platform Share Modal */}

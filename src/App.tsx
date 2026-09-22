@@ -54,9 +54,14 @@ import { WikiInfobox } from './components/public/WikiInfobox';
 import { AudioReader } from './components/public/AudioReader';
 import { TranslationSelector } from './components/public/TranslationSelector';
 import { AdBanner } from './components/public/AdBanner';
+import { ArticleReadingProgress } from './components/public/ArticleReadingProgress';
 import { translateArticle } from './utils/translationService';
 import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
+import { SocialShareAnalytics } from './components/admin/SocialShareAnalytics';
+import { ShareArticleModal } from './components/public/ShareArticleModal';
+import { ReadingListView } from './components/public/ReadingListView';
+import { recordSocialClickEvent, SocialPlatform } from './data/socialShareData';
 import { AdminArticleModal } from './components/AdminArticleModal';
 import { GreenLightLogo } from './components/GreenLightLogo';
 import { PhpCodeGenerator } from './components/admin/PhpCodeGenerator';
@@ -75,15 +80,58 @@ async function parseResponseJson(res: Response) {
 
 export default function App() {
   // App navigation state
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin'>('public');
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>('public');
   const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [activeCategorySlug, setActiveCategorySlug] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  // User Reading List (Local persistence)
+  const [bookmarkedIds, setBookmarkedIds] = useState<(string | number)[]>(() => {
+    try {
+      const saved = localStorage.getItem('greenlight_reading_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (err) {
+      console.error('Failed to parse reading list from localStorage:', err);
+    }
+    // Seed with initial featured article id for instant usability
+    return [1];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('greenlight_reading_list', JSON.stringify(bookmarkedIds));
+    } catch (err) {
+      console.error('Failed to save reading list to localStorage:', err);
+    }
+  }, [bookmarkedIds]);
+
+  const toggleBookmark = (articleId: string | number) => {
+    setBookmarkedIds(prev => {
+      if (prev.includes(articleId)) {
+        return prev.filter(id => id !== articleId);
+      } else {
+        return [...prev, articleId];
+      }
+    });
+  };
+
+  const isBookmarked = (articleId: string | number) => {
+    return bookmarkedIds.includes(articleId);
+  };
+
+  const clearReadingList = () => {
+    setBookmarkedIds([]);
+  };
+
   // Admin CMS Sub-tabs & Filter states
-  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php'>('articles');
+  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php' | 'social'>('articles');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareArticleTarget, setShareArticleTarget] = useState<Article | null>(null);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [adminArticleSearch, setAdminArticleSearch] = useState('');
@@ -270,6 +318,18 @@ export default function App() {
 
     if (fetchedArticle) {
       setSelectedArticle(fetchedArticle);
+
+      // Track incoming referral click if arrived via tracked social UTM link
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const utmSource = urlParams.get('utm_source') as SocialPlatform | null;
+        if (utmSource && fetchedArticle) {
+          recordSocialClickEvent(fetchedArticle.id, utmSource, articles);
+        }
+      } catch (err) {
+        // Ignore URL parsing errors
+      }
+
       if (currentLanguage !== 'en') {
         try {
           setIsTranslating(true);
@@ -659,7 +719,39 @@ export default function App() {
           </div>
 
           {/* Quick Actions & Language Selector */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* My Reading List Navigation Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentView(currentView === 'reading-list' ? 'public' : 'reading-list');
+                if (currentView !== 'reading-list') {
+                  setSelectedArticleSlug(null);
+                  setSearchQuery('');
+                }
+              }}
+              className={`min-h-[40px] px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs border ${
+                currentView === 'reading-list'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-900/20 ring-2 ring-emerald-500/20'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+              }`}
+              title="View My Reading List"
+              aria-label="My Reading List"
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${bookmarkedIds.length > 0 ? (currentView === 'reading-list' ? 'fill-white text-white' : 'fill-emerald-600 text-emerald-600') : ''}`} />
+              <span className="hidden sm:inline">My Reading List</span>
+              <span className="sm:hidden">Saved</span>
+              {bookmarkedIds.length > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                  currentView === 'reading-list'
+                    ? 'bg-white text-emerald-700'
+                    : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300'
+                }`}>
+                  {bookmarkedIds.length}
+                </span>
+              )}
+            </button>
+
             {/* Global Language Selector */}
             <TranslationSelector
               currentLanguage={currentLanguage}
@@ -734,16 +826,39 @@ export default function App() {
                   onClick={() => {
                     setActiveCategorySlug('all');
                     setSearchQuery('');
-                    if (currentView === 'article') setCurrentView('public');
+                    if (currentView !== 'public') setCurrentView('public');
                   }}
                   className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-1.5 ${
-                    activeCategorySlug === 'all' && !searchQuery
+                    activeCategorySlug === 'all' && !searchQuery && currentView === 'public'
                       ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Top Stories</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentView('reading-list');
+                    setSearchQuery('');
+                  }}
+                  className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-1.5 ${
+                    currentView === 'reading-list'
+                      ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
+                  }`}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${bookmarkedIds.length > 0 && currentView !== 'reading-list' ? 'fill-emerald-600 text-emerald-600' : ''}`} />
+                  <span>My Reading List</span>
+                  {bookmarkedIds.length > 0 && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono ${
+                      currentView === 'reading-list' ? 'bg-white text-emerald-700' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                    }`}>
+                      {bookmarkedIds.length}
+                    </span>
+                  )}
                 </button>
 
                 {categories.map((cat) => (
@@ -827,6 +942,8 @@ export default function App() {
               <HeroFeatured
                 articles={articles}
                 onSelectArticle={handleSelectArticle}
+                bookmarkedIds={bookmarkedIds}
+                onToggleBookmark={toggleBookmark}
               />
             )}
 
@@ -842,6 +959,8 @@ export default function App() {
                         articles={catArticles}
                         onSelectArticle={handleSelectArticle}
                         onSelectCategory={(slug) => setActiveCategorySlug(slug)}
+                        bookmarkedIds={bookmarkedIds}
+                        onToggleBookmark={toggleBookmark}
                       />
                       {/* Mid-feed sponsor banner after 2nd category */}
                       {idx === 1 && (
@@ -865,15 +984,32 @@ export default function App() {
                   <article
                     key={article.id}
                     onClick={() => handleSelectArticle(article.slug)}
-                    className="cursor-pointer bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:border-emerald-500/40 transition-all flex flex-col justify-between group"
+                    className="cursor-pointer bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:border-emerald-500/40 transition-all flex flex-col justify-between group relative"
                   >
-                    <div className="aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <div className="aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
                       <img
                         src={article.featured_image}
                         alt={article.title}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
+                      {/* Bookmark Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleBookmark(article.id);
+                        }}
+                        className={`absolute top-2.5 right-2.5 p-1.5 rounded-full backdrop-blur-md transition-all shadow-sm active:scale-90 ${
+                          isBookmarked(article.id)
+                            ? 'bg-emerald-600 text-white shadow-emerald-900/30'
+                            : 'bg-black/40 hover:bg-black/60 text-white/90 hover:text-white border border-white/20'
+                        }`}
+                        title={isBookmarked(article.id) ? "Remove from Reading List" : "Save to Reading List"}
+                        aria-label="Toggle Bookmark"
+                      >
+                        <Bookmark className={`w-3.5 h-3.5 ${isBookmarked(article.id) ? 'fill-current' : ''}`} />
+                      </button>
                     </div>
                     <div className="p-5 flex-1 flex flex-col justify-between">
                       <div>
@@ -903,7 +1039,14 @@ export default function App() {
         {currentView === 'article' && selectedArticle && (() => {
           const displayArticle = translatedArticle || selectedArticle;
           return (
-            <article className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
+            <article id="article-detail-container" className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
+              {/* Subtle Article Reading Progress Bar & Status Pill */}
+              <ArticleReadingProgress
+                targetContainerId="article-detail-container"
+                totalReadingTime={displayArticle.reading_time || 4}
+                showTopPill={true}
+              />
+
               {/* Back button, Breadcrumb & Share */}
               <div className="flex flex-row items-center justify-between gap-3">
                 <button
@@ -916,7 +1059,37 @@ export default function App() {
                 </button>
 
                 <div className="flex items-center gap-2">
-                  {/* Share button */}
+                  {/* Bookmark / Reading List Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => toggleBookmark(displayArticle.id)}
+                    className={`min-h-[40px] px-3.5 py-2 text-xs rounded-xl border flex items-center gap-1.5 transition-all shadow-xs active:scale-95 font-semibold ${
+                      isBookmarked(displayArticle.id)
+                        ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600'
+                    }`}
+                    title={isBookmarked(displayArticle.id) ? "Remove from Reading List" : "Save to Reading List"}
+                    aria-label="Bookmark this article"
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${isBookmarked(displayArticle.id) ? 'fill-emerald-600 dark:fill-emerald-400 text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
+                    <span>{isBookmarked(displayArticle.id) ? 'Saved' : 'Save Story'}</span>
+                  </button>
+
+                  {/* Share button with Multi-Platform Tracker Modal */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShareArticleTarget(displayArticle);
+                      setIsShareModalOpen(true);
+                    }}
+                    className="min-h-[40px] px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 hover:text-emerald-600 flex items-center gap-1.5 transition-colors shadow-xs active:scale-95 font-semibold"
+                    title="Share story via WhatsApp, LinkedIn, X, Facebook, Telegram, or Copy Tracked Link"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Share Story</span>
+                  </button>
+
+                  {/* Fast direct copy */}
                   <button
                     type="button"
                     onClick={() => {
@@ -924,10 +1097,11 @@ export default function App() {
                       setCopiedUrl(true);
                       setTimeout(() => setCopiedUrl(false), 2000);
                     }}
-                    className="min-h-[40px] px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-emerald-500 flex items-center gap-1.5 transition-colors shadow-xs active:scale-95"
+                    className="min-h-[40px] px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 flex items-center gap-1 transition-colors shadow-xs active:scale-95"
+                    title="Quick copy current link"
                   >
-                    {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
-                    <span>{copiedUrl ? 'Copied' : 'Share'}</span>
+                    {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span className="hidden sm:inline">{copiedUrl ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
               </div>
@@ -1100,6 +1274,22 @@ export default function App() {
           );
         })()}
 
+        {/* VIEW: MY READING LIST */}
+        {currentView === 'reading-list' && (
+          <ReadingListView
+            bookmarkedIds={bookmarkedIds}
+            articles={articles}
+            onSelectArticle={handleSelectArticle}
+            onToggleBookmark={toggleBookmark}
+            onClearReadingList={clearReadingList}
+            onBackToFeed={() => setCurrentView('public')}
+            onOpenShareModal={(article) => {
+              setShareArticleTarget(article);
+              setIsShareModalOpen(true);
+            }}
+          />
+        )}
+
         {/* VIEW 3: ADMIN CMS DASHBOARD */}
         {currentView === 'admin' && (
           <div className="space-y-6">
@@ -1182,6 +1372,22 @@ export default function App() {
                   <span className="truncate">
                     <span className="sm:hidden">SEO / GSC</span>
                     <span className="hidden sm:inline">SEO & Search Console</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAdminTab('social')}
+                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
+                    adminTab === 'social'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Share2 className="w-4 h-4 shrink-0" />
+                  <span className="truncate">
+                    <span className="sm:hidden">Social CTR</span>
+                    <span className="hidden sm:inline">Social Shares & CTR</span>
                   </span>
                 </button>
 
@@ -1622,6 +1828,14 @@ export default function App() {
               </div>
             )}
 
+            {/* TAB: SOCIAL MEDIA SHARES & CTR DASHBOARD */}
+            {adminTab === 'social' && (
+              <SocialShareAnalytics
+                articles={articles}
+                onSelectArticle={handleSelectArticle}
+              />
+            )}
+
             {/* TAB 3: CATEGORIES & HOMEPAGE DISPLAY ORDER */}
             {adminTab === 'categories' && (
               <div className="space-y-6">
@@ -1825,6 +2039,19 @@ export default function App() {
         categories={categories}
         authors={authors}
       />
+
+      {/* Public Multi-Platform Share Modal */}
+      {isShareModalOpen && shareArticleTarget && (
+        <ShareArticleModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setShareArticleTarget(null);
+          }}
+          article={shareArticleTarget}
+          articlesList={articles}
+        />
+      )}
 
       {/* Non-Tech Friendly Category Creation Modal */}
       {isCategoryModalOpen && (

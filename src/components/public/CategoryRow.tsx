@@ -19,6 +19,8 @@ export interface CategoryRowProps {
   articles: ArticleItem[];
   onSelectArticle: (slug: string) => void;
   onSelectCategory?: (categorySlug: string) => void;
+  bookmarkedIds?: (string | number)[];
+  onToggleBookmark?: (articleId: string | number) => void;
   className?: string;
 }
 
@@ -37,6 +39,8 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
   articles,
   onSelectArticle,
   onSelectCategory,
+  bookmarkedIds = [],
+  onToggleBookmark,
   className = ""
 }) => {
   if (!articles || articles.length === 0) {
@@ -95,6 +99,26 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
               <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-slate-900/80 backdrop-blur-sm text-white text-[10px] font-medium">
                 {article.reading_time || 3} min read
               </div>
+
+              {/* Bookmark Toggle */}
+              {onToggleBookmark && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleBookmark(article.id);
+                  }}
+                  className={`absolute top-2.5 right-2.5 p-1.5 rounded-full backdrop-blur-md transition-all shadow-sm active:scale-90 ${
+                    bookmarkedIds.includes(article.id)
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-black/40 hover:bg-black/60 text-white/90 hover:text-white border border-white/20'
+                  }`}
+                  title={bookmarkedIds.includes(article.id) ? "Remove from Reading List" : "Save to Reading List"}
+                  aria-label="Toggle Bookmark"
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${bookmarkedIds.includes(article.id) ? 'fill-current' : ''}`} />
+                </button>
+              )}
             </div>
 
             {/* Content Body */}

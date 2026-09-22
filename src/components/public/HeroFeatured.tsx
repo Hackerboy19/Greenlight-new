@@ -28,6 +28,8 @@ export interface ArticleItem {
 export interface HeroFeaturedProps {
   articles: ArticleItem[];
   onSelectArticle: (slug: string) => void;
+  bookmarkedIds?: (string | number)[];
+  onToggleBookmark?: (articleId: string | number) => void;
   className?: string;
 }
 
@@ -45,6 +47,8 @@ function timeAgo(dateString?: string): string {
 export const HeroFeatured: React.FC<HeroFeaturedProps> = ({
   articles,
   onSelectArticle,
+  bookmarkedIds = [],
+  onToggleBookmark,
   className = ""
 }) => {
   if (!articles || articles.length === 0) {
@@ -88,6 +92,26 @@ export const HeroFeatured: React.FC<HeroFeaturedProps> = ({
                 {primary.category_name || 'FSIA Special'}
               </span>
             </div>
+
+            {/* Top Right Bookmark Toggle */}
+            {onToggleBookmark && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleBookmark(primary.id);
+                }}
+                className={`absolute top-4 right-4 p-2.5 rounded-full backdrop-blur-md transition-all shadow-md active:scale-90 ${
+                  bookmarkedIds.includes(primary.id)
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-black/40 hover:bg-black/60 text-white/90 hover:text-white border border-white/20'
+                }`}
+                title={bookmarkedIds.includes(primary.id) ? "Remove from Reading List" : "Save to Reading List"}
+                aria-label="Toggle Bookmark"
+              >
+                <Bookmark className={`w-4 h-4 ${bookmarkedIds.includes(primary.id) ? 'fill-current' : ''}`} />
+              </button>
+            )}
 
             {/* Bottom Meta Overlay */}
             <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -165,13 +189,31 @@ export const HeroFeatured: React.FC<HeroFeaturedProps> = ({
 
               {/* Story Image */}
               {story.featured_image && (
-                <div className="w-24 sm:w-28 aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="relative w-24 sm:w-28 aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex-shrink-0 border border-slate-200 dark:border-slate-800 shadow-sm">
                   <img 
                     src={story.featured_image} 
                     alt={story.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
+                  {onToggleBookmark && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleBookmark(story.id);
+                      }}
+                      className={`absolute top-1.5 right-1.5 p-1 rounded-full backdrop-blur-xs transition-all active:scale-90 ${
+                        bookmarkedIds.includes(story.id)
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-black/40 hover:bg-black/60 text-white/90'
+                      }`}
+                      title={bookmarkedIds.includes(story.id) ? "Remove from Reading List" : "Save to Reading List"}
+                      aria-label="Toggle Bookmark"
+                    >
+                      <Bookmark className={`w-3 h-3 ${bookmarkedIds.includes(story.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  )}
                 </div>
               )}
             </article>

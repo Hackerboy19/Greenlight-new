@@ -18,6 +18,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Article, Category, Author } from '../../types';
+import { NEW_DATABASE_SQL } from '../../data/newDatabaseSql';
 
 interface PhpCodeGeneratorProps {
   articles: Article[];
@@ -26,7 +27,7 @@ interface PhpCodeGeneratorProps {
   initialSelectedArticle?: Article | null;
 }
 
-type PhpFileType = 'article' | 'api' | 'db' | 'sitemap' | 'widget';
+type PhpFileType = 'article' | 'api' | 'new_db' | 'db' | 'sitemap' | 'widget';
 
 export const PhpCodeGenerator: React.FC<PhpCodeGeneratorProps> = ({
   articles,
@@ -730,6 +731,15 @@ try {
           mimeType: 'application/x-httpd-php'
         };
       }
+
+      case 'new_db': {
+        return {
+          code: NEW_DATABASE_SQL,
+          filename: 'new_database.sql',
+          description: 'Complete modernized MariaDB 10.5+ / MySQL 8.0+ database schema with full relational foreign keys, utf8mb4_unicode_ci collation, B-Tree and full-text indexes, and all 10 migrated articles, categories, authors, FAQs, and tags from the old database dump (jaipurwe_fsianewss).',
+          mimeType: 'application/sql'
+        };
+      }
     }
   }, [selectedFileType, activeArticle, siteUrl, dbMode, articles, articleTitle, articleSlug, articleExcerpt, articleContent, articleImage, articleOgImage, articleMetaTitle, articleMetaDesc, articleCategory, articleAuthor, articleReadingTime, articleInfobox]);
 
@@ -813,7 +823,7 @@ try {
       </div>
 
       {/* File Selector Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold">
         <button
           type="button"
           onClick={() => setSelectedFileType('article')}
@@ -838,6 +848,19 @@ try {
         >
           <Server className="w-4 h-4 shrink-0" />
           <span className="truncate">api-articles.php</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedFileType('new_db')}
+          className={`min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            selectedFileType === 'new_db'
+              ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-emerald-500/30'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Database className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span className="truncate">new_database.sql</span>
         </button>
 
         <button
@@ -869,83 +892,129 @@ try {
         <button
           type="button"
           onClick={() => setSelectedFileType('db')}
-          className={`col-span-2 sm:col-span-1 min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
+          className={`min-h-[44px] px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-2 ${
             selectedFileType === 'db'
               ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
-          <Database className="w-4 h-4 shrink-0" />
+          <Terminal className="w-4 h-4 shrink-0" />
           <span className="truncate">db-connect.php</span>
         </button>
       </div>
 
       {/* Configuration Controls Bar */}
       <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Target Article Selector */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
-              Select Story / Seed Article
-            </label>
-            <select
-              value={selectedArticleId}
-              onChange={(e) => setSelectedArticleId(Number(e.target.value))}
-              className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
-            >
-              {articles.map((art) => (
-                <option key={art.id} value={art.id}>
-                  #{art.id}: {art.title.slice(0, 45)}...
-                </option>
-              ))}
-            </select>
-          </div>
+        {selectedFileType === 'new_db' ? (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Database className="w-4 h-4 text-emerald-600" />
+                  <span>Modernized MySQL 8.0+ / MariaDB Database Migration</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Migrated from legacy CodeIgniter database (<code className="font-mono text-emerald-600">jaipurwe_fsianewss</code>) into 10 clean, normalized relational tables.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href="/new_database.sql"
+                  download="new_database.sql"
+                  className="px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-xl flex items-center gap-1.5 transition-colors border border-emerald-200 dark:border-emerald-800"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Direct Download .SQL</span>
+                </a>
+              </div>
+            </div>
 
-          {/* Website Domain / Base URL */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
-              Target Website Base URL
-            </label>
-            <input
-              type="url"
-              value={siteUrl}
-              onChange={(e) => setSiteUrl(e.target.value)}
-              placeholder="https://greenlight.fsia.in"
-              className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          {/* Integration Mode (for article.php) */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
-              Integration Architecture
-            </label>
-            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setDbMode('standalone')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
-                  dbMode === 'standalone'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Standalone (Drop &amp; Run)
-              </button>
-              <button
-                type="button"
-                onClick={() => setDbMode('pdo')}
-                className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
-                  dbMode === 'pdo'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                MySQL PDO Driven
-              </button>
+            {/* Quick stats grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Tables Created</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">10 Normalized</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Collation</span>
+                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">utf8mb4_unicode_ci</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Articles Migrated</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">10 Full Stories</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">Search &amp; Integrity</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Fulltext &amp; FK Cascade</span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Target Article Selector */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Select Story / Seed Article
+              </label>
+              <select
+                value={selectedArticleId}
+                onChange={(e) => setSelectedArticleId(Number(e.target.value))}
+                className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
+              >
+                {articles.map((art) => (
+                  <option key={art.id} value={art.id}>
+                    #{art.id}: {art.title.slice(0, 45)}...
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Website Domain / Base URL */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Target Website Base URL
+              </label>
+              <input
+                type="url"
+                value={siteUrl}
+                onChange={(e) => setSiteUrl(e.target.value)}
+                placeholder="https://greenlight.fsia.in"
+                className="w-full text-xs font-mono px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Integration Mode (for article.php) */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Integration Architecture
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setDbMode('standalone')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                    dbMode === 'standalone'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Standalone (Drop &amp; Run)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDbMode('pdo')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
+                    dbMode === 'pdo'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  MySQL PDO Driven
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Informational description pill */}
         <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
@@ -1002,43 +1071,84 @@ try {
       <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs space-y-4">
         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-emerald-600" />
-          <span>Quick Setup Guide for Developers (Drop Into Your Current Website)</span>
+          <span>
+            {selectedFileType === 'new_db'
+              ? 'Database Migration & Import Instructions (MySQL / MariaDB / phpMyAdmin)'
+              : 'Quick Setup Guide for Developers (Drop Into Your Current Website)'}
+          </span>
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-            <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
-              <span>Upload to Web Root</span>
+        {selectedFileType === 'new_db' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
+                <span>Import via phpMyAdmin or Terminal</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                Log into cPanel / phpMyAdmin, select your target database, click <strong>Import</strong> and upload <code className="font-mono text-emerald-600 bg-white dark:bg-slate-900 px-1 rounded">new_database.sql</code>, or run:
+              </p>
+              <code className="block font-mono text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                mysql -u username -p database_name &lt; new_database.sql
+              </code>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              Upload <code className="font-mono text-emerald-600 bg-white dark:bg-slate-900 px-1 rounded">{filename}</code> to your website&apos;s <code className="font-mono">public_html/</code>, WordPress theme root, or custom directory via FTP or cPanel File Manager.
-            </p>
-          </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-            <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">2</span>
-              <span>Apache .htaccess Rule (Optional)</span>
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">2</span>
+                <span>Connect via db-connect.php</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                Switch to the <strong className="text-emerald-600">db-connect.php</strong> tab above to copy the pre-configured PDO connection script with UTF-8mb4 character set support.
+              </p>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              For pretty URLs like <code className="font-mono text-emerald-600 bg-white dark:bg-slate-900 px-1 rounded">/article/slug-name</code>, add this line to your <code className="font-mono">.htaccess</code>:
-            </p>
-            <code className="block font-mono text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-              RewriteRule ^article/([a-zA-Z0-9_-]+)$ article.php?slug=$1 [L,QSA]
-            </code>
-          </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-            <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
-              <span>Verify Open Graph &amp; SERP</span>
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
+                <span>Full Relational Integrity Verified</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                The new schema replaces the 21 legacy flat tables with 10 normalized InnoDB tables, foreign key cascading, and FULLTEXT search indexing (<code className="font-mono text-emerald-600">ft_articles_search</code>).
+              </p>
             </div>
-            <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
-              Open <a href="https://developers.facebook.com/tools/debug/" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline">Facebook Sharing Debugger</a> or WhatsApp web to test preview card rendering.
-            </p>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
+                <span>Upload to Web Root</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                Upload <code className="font-mono text-emerald-600 bg-white dark:bg-slate-900 px-1 rounded">{filename}</code> to your website&apos;s <code className="font-mono">public_html/</code>, WordPress theme root, or custom directory via FTP or cPanel File Manager.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">2</span>
+                <span>Apache .htaccess Rule (Optional)</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                For pretty URLs like <code className="font-mono text-emerald-600 bg-white dark:bg-slate-900 px-1 rounded">/article/slug-name</code>, add this line to your <code className="font-mono">.htaccess</code>:
+              </p>
+              <code className="block font-mono text-[10px] bg-white dark:bg-slate-900 p-1.5 rounded border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                RewriteRule ^article/([a-zA-Z0-9_-]+)$ article.php?slug=$1 [L,QSA]
+              </code>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
+                <span>Verify Open Graph &amp; SERP</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                Open <a href="https://developers.facebook.com/tools/debug/" target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline">Facebook Sharing Debugger</a> or WhatsApp web to test preview card rendering.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import adminRoutes from './adminRoutes.js';
 import * as articleController from '../controllers/admin/articleController.js';
 import * as categoryController from '../controllers/admin/categoryController.js';
 import * as authorController from '../controllers/admin/authorController.js';
+import * as gscController from '../controllers/admin/gscDashboardController.js';
 import { generateToken } from '../middlewares/authMiddleware.js';
 import { memoryStore } from '../config/database.js';
 
@@ -64,6 +65,9 @@ router.put('/articles/:id', articleController.updateArticle);
 router.delete('/articles/:id', articleController.deleteArticle);
 router.post('/articles/:id/quick-fix-seo', articleController.quickFixSeo);
 router.post('/seo/quick-fix', articleController.quickFixSeo);
+router.post('/gsc/content-audit', gscController.runContentAudit);
+router.get('/gsc/performance', gscController.getPerformanceOverview);
+router.get('/gsc/rank-drops', gscController.getRankDrops);
 
 router.get('/categories', categoryController.getAllCategories);
 router.get('/authors', authorController.getAllAuthors);

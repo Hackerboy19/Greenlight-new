@@ -36,6 +36,7 @@ import { InfoboxBuilder } from './admin/InfoboxBuilder';
 import { WysiwygEditor } from './admin/WysiwygEditor';
 import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
 import { GoogleSerpPreview } from './admin/GoogleSerpPreview';
+import { SeoChecklist } from './admin/SeoChecklist';
 import { calculateSeoHealth, SEO_STATUS_CONFIG } from '../utils/seoHealth';
 
 export interface AdminArticleModalProps {
@@ -819,6 +820,42 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                   </div>
                 </div>
               </div>
+
+              {/* LIVE SEO, KEYWORDS & IMAGE ALT CHECKLIST COMPONENT */}
+              <SeoChecklist
+                title={title}
+                metaTitle={metaTitle}
+                metaDescription={metaDescription}
+                metaKeywords={metaKeywords}
+                featuredImage={featuredImage}
+                ogImage={ogImage}
+                contentHtml={content}
+                excerpt={excerpt}
+                onQuickFix={handleModalQuickFixSeo}
+                isAiGenerating={isAiGeneratingSeo}
+                onFocusMetaTitle={() => {
+                  document.getElementById('article-meta-title-input')?.focus();
+                  document.getElementById('article-meta-title-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                onFocusMetaDescription={() => {
+                  document.getElementById('article-meta-description-input')?.focus();
+                  document.getElementById('article-meta-description-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                onFocusKeywords={() => {
+                  document.getElementById('article-meta-keywords-input')?.focus();
+                  document.getElementById('article-meta-keywords-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                onFocusOgImage={() => {
+                  document.getElementById('article-og-image-input')?.focus();
+                  document.getElementById('article-og-image-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                onFocusFeaturedImage={() => {
+                  setModalTab('media');
+                  setTimeout(() => {
+                    document.getElementById('article-featured-image-input')?.focus();
+                  }, 100);
+                }}
+              />
 
               {/* SECTION 1: META TITLE & META DESCRIPTION */}
               <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 shadow-2xs">

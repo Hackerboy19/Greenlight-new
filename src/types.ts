@@ -78,3 +78,34 @@ export interface GscRankDrop {
   status: 'critical_drop' | 'slight_drop' | 'stable' | 'surging';
   severity: 'high' | 'low' | 'normal' | 'positive';
 }
+
+export interface ContentAuditRecommendation {
+  articleId: number;
+  slug: string;
+  currentTitle: string;
+  category?: string;
+  currentCtr: number;
+  clicks?: number;
+  impressions?: number;
+  suggestedHeadline: string;
+  alternativeHeadline?: string;
+  rationale: string;
+  expectedImpact: string;
+  status: 'high_performer' | 'steady' | 'needs_optimization';
+  strengths?: string[];
+  improvements?: string[];
+}
+
+export interface ContentAuditOverview {
+  auditedArticlesCount: number;
+  averageCtr: number;
+  totalEstimatedTrafficLift: string;
+  keyFindings: string;
+}
+
+export interface ContentAuditResult {
+  overview: ContentAuditOverview;
+  recommendations: ContentAuditRecommendation[];
+  source?: string;
+}
+

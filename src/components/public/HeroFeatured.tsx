@@ -75,7 +75,7 @@ export const HeroFeatured: React.FC<HeroFeaturedProps> = ({
         {/* PRIMARY SPOTLIGHT STORY (7 Cols) */}
         <article 
           onClick={() => onSelectArticle(primary.slug)}
-          className="lg:col-span-7 group cursor-pointer flex flex-col space-y-4"
+          className="article-card article-card-reveal lg:col-span-7 group cursor-pointer flex flex-col space-y-4"
         >
           <div className="relative aspect-[16/10] w-full rounded-3xl overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-sm border border-slate-200/60 dark:border-slate-800/80">
             <img 
@@ -158,7 +158,7 @@ export const HeroFeatured: React.FC<HeroFeaturedProps> = ({
             <article 
               key={story.id}
               onClick={() => onSelectArticle(story.slug)}
-              className={`group cursor-pointer py-4 first:pt-0 last:pb-0 flex items-start gap-4 transition-all`}
+              className="article-card article-card-reveal group cursor-pointer py-4 first:pt-0 last:pb-0 flex items-start gap-4 transition-all"
             >
               {/* Story content */}
               <div className="flex-1 min-w-0 space-y-1.5">

@@ -62,6 +62,7 @@ import { translateArticle } from './utils/translationService';
 import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
 import { SocialShareAnalytics } from './components/admin/SocialShareAnalytics';
+import { AiContentAuditPanel } from './components/admin/AiContentAuditPanel';
 import { ShareArticleModal } from './components/public/ShareArticleModal';
 import { ReadingListView } from './components/public/ReadingListView';
 import { recordSocialClickEvent, SocialPlatform } from './data/socialShareData';
@@ -407,6 +408,31 @@ export default function App() {
       if (editingArticle && editingArticle.id === updatedArticle.id) {
         setEditingArticle(prev => prev ? { ...prev, ...updatedArticle } : null);
       }
+    }
+  };
+
+  // AI Content Audit headline applicator
+  const handleApplyHeadlineFromAudit = async (articleId: number, newHeadline: string) => {
+    try {
+      const res = await fetch(`/api/admin/articles/${articleId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-test-role': 'admin'
+        },
+        body: JSON.stringify({
+          title: newHeadline,
+          meta_title: newHeadline
+        })
+      });
+
+      if (res.ok) {
+        setArticles(prev => prev.map(a => a.id === articleId ? { ...a, title: newHeadline, meta_title: newHeadline } : a));
+        setSyncToast(`Applied improved headline to Story #${articleId}!`);
+        setTimeout(() => setSyncToast(null), 3500);
+      }
+    } catch (err) {
+      console.warn('Failed to apply headline update:', err);
     }
   };
 
@@ -1083,7 +1109,7 @@ export default function App() {
                   <article
                     key={article.id}
                     onClick={() => handleSelectArticle(article.slug)}
-                    className="cursor-pointer bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:border-emerald-500/40 transition-all flex flex-col justify-between group relative"
+                    className="article-card article-card-reveal cursor-pointer bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-xl hover:border-emerald-500/40 transition-all flex flex-col justify-between group relative"
                   >
                     <div className="aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
                       <img
@@ -2178,6 +2204,16 @@ export default function App() {
 
                 {/* Recharts Analytics Charts */}
                 <AnalyticsCharts data={gscData} />
+
+                {/* AI Content Audit Summary Panel (Top 10 articles by CTR analyzed with Gemini) */}
+                <AiContentAuditPanel
+                  articles={articles}
+                  onApplyHeadline={handleApplyHeadlineFromAudit}
+                  onEditArticle={(art) => {
+                    setEditingArticle(art);
+                    setIsArticleModalOpen(true);
+                  }}
+                />
 
                 {/* 7-Day Rank Drops Table */}
                 <RankDropsTable data={gscRankDrops} />

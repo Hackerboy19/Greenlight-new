@@ -136,3 +136,29 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
+/* ==========================================================================
+   Phase 4: Scroll-Reveal Fade-in-up Animations
+   ========================================================================== */
+.article-card-reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.article-card-reveal.fade-in-up {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Fallback / Instant render for users preferring reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .article-card-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+

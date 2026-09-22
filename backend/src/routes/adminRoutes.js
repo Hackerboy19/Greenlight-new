@@ -55,6 +55,7 @@ router.get('/gsc/performance', authorizeRole('editor'), gscController.getPerform
 router.get('/gsc/rank-drops', authorizeRole('editor'), gscController.getRankDrops);
 router.get('/gsc/status', authorizeRole('admin'), gscController.getSchedulerStatus);
 router.post('/gsc/sync', authorizeRole('admin'), gscController.triggerSync);
+router.post('/gsc/content-audit', authorizeRole('editor'), gscController.runContentAudit);
 
 /* ==========================================================================
    Live Greenlight.fsia.in Data Synchronizer

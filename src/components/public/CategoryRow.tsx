@@ -86,7 +86,7 @@ export const CategoryRow: React.FC<CategoryRowProps> = ({
           <article
             key={article.id}
             onClick={() => onSelectArticle(article.slug)}
-            className="group cursor-pointer flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900/60 transition-all"
+            className="article-card article-card-reveal group cursor-pointer flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-900/60 transition-all"
           >
             {/* Featured Image */}
             <div className="relative aspect-[16/9] w-full bg-slate-100 dark:bg-slate-800 overflow-hidden">

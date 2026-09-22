@@ -96,6 +96,7 @@ export async function createArticle(req, res, next) {
       featured_image,
       meta_title,
       meta_description,
+      meta_keywords,
       og_image,
       category_id,
       author_id,
@@ -140,6 +141,7 @@ export async function createArticle(req, res, next) {
       featured_image: featured_image || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1200&auto=format&fit=crop&q=80',
       meta_title: meta_title || title,
       meta_description: meta_description || cleanExcerpt,
+      meta_keywords: meta_keywords || '',
       og_image: og_image || featured_image || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1200&auto=format&fit=crop&q=80',
       category_id: category.id,
       category_name: category.name,
@@ -195,6 +197,7 @@ export async function updateArticle(req, res, next) {
       featured_image,
       meta_title,
       meta_description,
+      meta_keywords,
       og_image,
       category_id,
       author_id,
@@ -247,6 +250,7 @@ export async function updateArticle(req, res, next) {
       featured_image: featured_image !== undefined ? featured_image : existing.featured_image,
       meta_title: meta_title !== undefined ? meta_title : existing.meta_title,
       meta_description: meta_description !== undefined ? meta_description : existing.meta_description,
+      meta_keywords: meta_keywords !== undefined ? meta_keywords : (existing.meta_keywords || ''),
       og_image: og_image !== undefined ? og_image : (existing.og_image || existing.featured_image),
       category_id: category,
       category_name: categoryName,
@@ -338,6 +342,7 @@ export async function quickFixSeo(req, res, next) {
         ...memoryStore.articles[articleIndex],
         meta_title: generated.meta_title,
         meta_description: generated.meta_description,
+        meta_keywords: generated.meta_keywords || memoryStore.articles[articleIndex].meta_keywords || '',
         og_image: generated.og_image || memoryStore.articles[articleIndex].og_image || memoryStore.articles[articleIndex].featured_image,
         updated_at: new Date().toISOString()
       };
@@ -358,6 +363,7 @@ export async function quickFixSeo(req, res, next) {
         ...targetArticle,
         meta_title: generated.meta_title,
         meta_description: generated.meta_description,
+        meta_keywords: generated.meta_keywords || targetArticle.meta_keywords || '',
         og_image: generated.og_image
       },
       generated

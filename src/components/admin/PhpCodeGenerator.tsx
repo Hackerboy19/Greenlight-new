@@ -58,6 +58,7 @@ export const PhpCodeGenerator: React.FC<PhpCodeGeneratorProps> = ({
   const articleOgImage = activeArticle?.og_image || activeArticle?.featured_image || 'https://greenlight.fsia.in/assets/img/blog/1774683990.png';
   const articleMetaTitle = activeArticle?.meta_title || articleTitle;
   const articleMetaDesc = activeArticle?.meta_description || articleExcerpt;
+  const articleMetaKeywords = activeArticle?.meta_keywords || '';
   const articleCategory = activeArticle?.category_name || 'Fashion & Awards';
   const articleAuthor = activeArticle?.author_name || 'FSIA Editorial Board';
   const articleReadingTime = activeArticle?.reading_time || 4;
@@ -100,6 +101,7 @@ $articlesStore = [
         'slug' => '${articleSlug}',
         'meta_title' => '${addslashes(articleMetaTitle)}',
         'meta_description' => '${addslashes(articleMetaDesc)}',
+        'meta_keywords' => '${addslashes(articleMetaKeywords)}',
         'featured_image' => '${articleImage}',
         'og_image' => '${articleOgImage}',
         'excerpt' => '${addslashes(articleExcerpt)}',
@@ -123,6 +125,9 @@ $canonicalUrl = $baseUrl . '/article.php?slug=' . urlencode($article['slug']);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($article['meta_title']) ?> - Greenlight FSIA</title>
     <meta name="description" content="<?= htmlspecialchars($article['meta_description']) ?>">
+    <?php if (!empty($article['meta_keywords'])): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($article['meta_keywords']) ?>">
+    <?php endif; ?>
     <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl) ?>">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
 
@@ -350,6 +355,7 @@ $canonicalUrl = $baseUrl . '/article.php?slug=' . urlencode($article['slug']);
 $ogImage = !empty($article['og_image']) ? $article['og_image'] : $article['featured_image'];
 $metaTitle = !empty($article['meta_title']) ? $article['meta_title'] : $article['title'];
 $metaDescription = !empty($article['meta_description']) ? $article['meta_description'] : $article['excerpt'];
+$metaKeywords = !empty($article['meta_keywords']) ? $article['meta_keywords'] : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -358,6 +364,9 @@ $metaDescription = !empty($article['meta_description']) ? $article['meta_descrip
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($metaTitle) ?> - Greenlight FSIA</title>
     <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php if (!empty($metaKeywords)): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
     <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl) ?>">
 
     <!-- Open Graph -->

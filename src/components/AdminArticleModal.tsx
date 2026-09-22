@@ -27,12 +27,15 @@ import {
   Eye,
   RefreshCw,
   Code2,
-  Loader2
+  Loader2,
+  Tag,
+  Hash
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
 import { WysiwygEditor } from './admin/WysiwygEditor';
 import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
+import { GoogleSerpPreview } from './admin/GoogleSerpPreview';
 import { calculateSeoHealth, SEO_STATUS_CONFIG } from '../utils/seoHealth';
 
 export interface AdminArticleModalProps {
@@ -70,6 +73,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [featuredImage, setFeaturedImage] = useState('');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
+  const [metaKeywords, setMetaKeywords] = useState('');
   const [ogImage, setOgImage] = useState('');
   const [previewTab, setPreviewTab] = useState<'google' | 'social' | 'twitter' | 'whatsapp'>('google');
   const [copiedTags, setCopiedTags] = useState(false);
@@ -101,6 +105,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setFeaturedImage(article.featured_image || '');
       setMetaTitle(article.meta_title ?? '');
       setMetaDescription(article.meta_description ?? '');
+      setMetaKeywords(article.meta_keywords ?? '');
       setOgImage(article.og_image ?? '');
       setCategoryId(article.category_id || defaultCatId);
       setAuthorId(article.author_id || defaultAuthId);
@@ -115,6 +120,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setFeaturedImage(defaultImg);
       setMetaTitle('');
       setMetaDescription('');
+      setMetaKeywords('');
       setOgImage(defaultImg);
       setCategoryId(defaultCatId);
       setAuthorId(defaultAuthId);
@@ -153,6 +159,36 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
     }
   };
 
+  const handleAutoSuggestKeywords = () => {
+    const categoryName = categories.find(c => c.id === Number(categoryId))?.name || '';
+    const candidates: string[] = [];
+    if (categoryName) candidates.push(categoryName.toLowerCase());
+
+    if (title.trim()) {
+      const cleanTitle = title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+      const words = cleanTitle
+        .split(/\s+/)
+        .filter(w => w.length > 3 && !['with', 'from', 'this', 'that', 'your', 'about', 'guide', 'into', 'for', 'the', 'and'].includes(w));
+      if (words.length > 0) {
+        candidates.push(words.slice(0, 3).join(' '));
+        if (words[0]) candidates.push(words[0]);
+      }
+    }
+    candidates.push('india news', 'fsia official');
+
+    const unique = Array.from(new Set(candidates)).filter(Boolean);
+    setMetaKeywords(unique.join(', '));
+  };
+
+  const parsedKeywords = metaKeywords
+    ? metaKeywords.split(',').map(k => k.trim()).filter(Boolean)
+    : [];
+
+  const handleRemoveKeyword = (keywordToRemove: string) => {
+    const updated = parsedKeywords.filter(k => k.toLowerCase() !== keywordToRemove.toLowerCase());
+    setMetaKeywords(updated.join(', '));
+  };
+
   const handleModalQuickFixSeo = async () => {
     if (isAiGeneratingSeo) return;
     setIsAiGeneratingSeo(true);
@@ -175,6 +211,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
             category_name: categories.find(c => c.id === Number(categoryId))?.name,
             meta_title: metaTitle,
             meta_description: metaDescription,
+            meta_keywords: metaKeywords,
             og_image: ogImage
           },
           saveImmediately: false
@@ -192,6 +229,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       }
       if (data.generated?.meta_description) {
         setMetaDescription(data.generated.meta_description);
+      }
+      if (data.generated?.meta_keywords) {
+        setMetaKeywords(data.generated.meta_keywords);
       }
       if (data.generated?.og_image && !ogImage.trim()) {
         setOgImage(data.generated.og_image);
@@ -247,7 +287,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 <title>${metaTitle || title || 'Greenlight FSIA Official Story'}</title>
 <meta name="title" content="${metaTitle || title || ''}">
 <meta name="description" content="${metaDescription || excerpt || ''}">
-<link rel="canonical" href="${canonicalUrl}">
+${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link rel="canonical" href="${canonicalUrl}">
 
 <!-- Open Graph / Facebook / LinkedIn / WhatsApp -->
 <meta property="og:type" content="article">
@@ -288,6 +328,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
         featured_image: featuredImage,
         meta_title: metaTitle.trim(),
         meta_description: metaDescription.trim(),
+        meta_keywords: metaKeywords.trim(),
         og_image: ogImage.trim(),
         category_id: Number(categoryId) || 1,
         author_id: Number(authorId) || 1,
@@ -572,6 +613,48 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                 />
               </div>
 
+              {/* Google SERP Snippet Quick Banner in Story Tab */}
+              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-md bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                      G
+                    </div>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
+                      Google Search Result Snippet Preview
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                      ({metaTitle ? 'Custom Meta Title' : 'Headline'} + {metaDescription ? 'Custom Meta Desc' : 'Lead Summary'})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalTab('seo')}
+                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-1"
+                  >
+                    <span>Open Full SERP Simulator</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div 
+                  onClick={() => setModalTab('seo')}
+                  className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 text-xs space-y-1 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-600 transition-colors shadow-2xs"
+                  title="Click to edit Meta Title & Description in SEO tab"
+                >
+                  <div className="text-[11px] text-slate-500 font-mono truncate">
+                    https://greenlight.fsia.in › article › {previewSlug}
+                  </div>
+                  <div className="text-sm font-medium text-blue-700 dark:text-blue-400 line-clamp-1 hover:underline">
+                    {metaTitle || title || 'Headline Title | Greenlight FSIA'}
+                  </div>
+                  <div className="text-[12px] text-slate-600 dark:text-slate-400 line-clamp-2">
+                    <span className="text-slate-500 mr-1">Sep 22, 2026 —</span>
+                    {metaDescription || excerpt || 'Short summary snippet will appear here...'}
+                  </div>
+                </div>
+              </div>
+
               {/* Visual WYSIWYG Editor */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -819,6 +902,86 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                     Optimal length: 120–160 characters. A concise, engaging summary increases Google CTR and WhatsApp link preview clarity.
                   </p>
                 </div>
+
+                {/* SEO Keywords Field */}
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <label htmlFor="article-meta-keywords-input" className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>SEO Keywords</span>
+                      <code className="text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                        &lt;meta name="keywords"&gt;
+                      </code>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        id="meta-keywords-suggest-btn"
+                        onClick={handleAutoSuggestKeywords}
+                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>Auto-suggest from Headline</span>
+                      </button>
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800">
+                        {parsedKeywords.length} {parsedKeywords.length === 1 ? 'keyword' : 'keywords'}
+                      </span>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    id="article-meta-keywords-input"
+                    value={metaKeywords}
+                    onChange={(e) => setMetaKeywords(e.target.value)}
+                    placeholder="e.g. forever star india awards, fsia 2026, talent recognition, national awards"
+                    className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Input comma-separated target keywords for search indexing. These will be stored in the article object and utilized by Gemini AI for contextual meta generation.
+                  </p>
+
+                  {/* Interactive Keyword Tag Pills */}
+                  {parsedKeywords.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1 flex items-center gap-1">
+                        <Hash className="w-3 h-3" />
+                        <span>Parsed Tags:</span>
+                      </span>
+                      {parsedKeywords.map((kw, idx) => (
+                        <span
+                          key={`${kw}-${idx}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-lg"
+                        >
+                          <span>{kw}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveKeyword(kw)}
+                            title={`Remove "${kw}"`}
+                            className="text-emerald-600 dark:text-emerald-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors ml-0.5 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* DEDICATED GOOGLE SERP PREVIEW CARD */}
+              <div className="space-y-2">
+                <GoogleSerpPreview
+                  title={title}
+                  metaTitle={metaTitle}
+                  metaDescription={metaDescription}
+                  excerpt={excerpt}
+                  slug={previewSlug}
+                  thumbnailUrl={activeOgImage}
+                  publishDate={article?.published_at}
+                  categoryName={categories.find(c => c.id === Number(categoryId))?.name}
+                  onFocusMetaTitle={() => document.getElementById('article-meta-title-input')?.focus()}
+                  onFocusMetaDescription={() => document.getElementById('article-meta-description-input')?.focus()}
+                />
               </div>
 
               {/* SECTION 2: OPEN GRAPH SHARE IMAGE (og:image) */}
@@ -986,27 +1149,18 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 
                 {/* Google Search SERP Simulator */}
                 {previewTab === 'google' && (
-                  <div id="google-serp-preview-card" className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm space-y-2">
-                    <div className="flex items-center gap-2.5 text-xs">
-                      <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
-                        G
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-medium text-slate-900 dark:text-slate-100 leading-none">Greenlight FSIA Official</span>
-                        <span className="text-[11px] text-slate-500 font-mono truncate max-w-sm sm:max-w-md">
-                          https://greenlight.fsia.in › article › {previewSlug}
-                        </span>
-                      </div>
-                    </div>
-
-                    <h4 className="text-base sm:text-lg font-medium text-blue-700 dark:text-blue-400 hover:underline cursor-pointer leading-snug pt-0.5 line-clamp-1">
-                      {metaTitle || title || 'Greenlight Editorial Headline - Forever Star India Awards'}
-                    </h4>
-
-                    <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                      {metaDescription || excerpt || 'Read verified in-depth reporting, editorial analysis, and factsheet credentials on Greenlight FSIA.'}
-                    </p>
-                  </div>
+                  <GoogleSerpPreview
+                    title={title}
+                    metaTitle={metaTitle}
+                    metaDescription={metaDescription}
+                    excerpt={excerpt}
+                    slug={previewSlug}
+                    thumbnailUrl={activeOgImage}
+                    publishDate={article?.published_at}
+                    categoryName={categories.find(c => c.id === Number(categoryId))?.name}
+                    onFocusMetaTitle={() => document.getElementById('article-meta-title-input')?.focus()}
+                    onFocusMetaDescription={() => document.getElementById('article-meta-description-input')?.focus()}
+                  />
                 )}
 
                 {/* Facebook / LinkedIn Open Graph Simulator */}
@@ -1137,6 +1291,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
                   og_image: ogImage || featuredImage,
                   meta_title: metaTitle || title,
                   meta_description: metaDescription || excerpt,
+                  meta_keywords: metaKeywords,
                   category_id: Number(categoryId),
                   category_name: categories.find(c => c.id === Number(categoryId))?.name || 'News',
                   category_slug: categories.find(c => c.id === Number(categoryId))?.slug || 'news',

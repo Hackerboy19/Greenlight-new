@@ -76,20 +76,30 @@ function generateFallbackSeo(article) {
   // 3. OG Image: Use existing or featured_image
   const ogImage = article.og_image || article.featured_image || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80';
 
+  // 4. Meta Keywords
+  let keywordsList = [];
+  if (article.meta_keywords && article.meta_keywords.trim()) {
+    keywordsList = article.meta_keywords.split(',').map(k => k.trim()).filter(Boolean);
+  } else {
+    keywordsList = [category, 'India News', 'FSIA Recognition', 'Special Report'];
+  }
+  const metaKeywords = keywordsList.join(', ');
+
   return {
     meta_title: metaTitle,
     meta_description: metaDesc,
+    meta_keywords: metaKeywords,
     og_image: ogImage,
-    keywords: [category, 'India News', 'FSIA Recognition', 'Special Report'],
+    keywords: keywordsList,
     source: 'heuristic_fallback',
     reasoning: 'Generated optimized metadata structure formatted for Google SERP and Open Graph card standards.'
   };
 }
 
 /**
- * Generates SEO metadata (meta_title, meta_description, og_image) using Gemini 3.8 Flash
+ * Generates SEO metadata (meta_title, meta_description, meta_keywords, og_image) using Gemini 3.8 Flash
  * 
- * @param {Object} article - The article payload containing title, content, excerpt, category_name, featured_image
+ * @param {Object} article - The article payload containing title, content, excerpt, category_name, featured_image, meta_keywords
  * @returns {Promise<Object>} Generated SEO fields
  */
 export async function generateArticleSeo(article) {
@@ -111,24 +121,26 @@ Article Title: "${article.title || 'Untitled'}"
 Category: "${article.category_name || 'General'}"
 Featured Image: "${article.featured_image || ''}"
 Existing Excerpt: "${cleanContent(article.excerpt || '')}"
+${article.meta_keywords ? `Editor Specified Target SEO Keywords: "${article.meta_keywords}"` : ''}
 Article Content Extract:
 """
 ${truncatedBody}
 """
 
 Requirements:
-1. meta_title: High-converting, click-worthy, search-optimized title between 50 and 60 characters. Must include main search keywords without keyword stuffing.
-2. meta_description: Compelling summary between 135 and 160 characters with strong call-to-action for searchers on Google.
+1. meta_title: High-converting, click-worthy, search-optimized title between 50 and 60 characters. ${article.meta_keywords ? 'Naturally incorporate priority target keywords without keyword stuffing.' : 'Must include main search keywords without keyword stuffing.'}
+2. meta_description: Compelling summary between 135 and 160 characters with strong call-to-action for searchers on Google. ${article.meta_keywords ? 'Should align with provided target keywords.' : ''}
 3. og_image: The best Open Graph social preview image URL (if the article has a valid featured_image, reuse it; otherwise provide a relevant high-resolution image URL).
-4. keywords: 3-5 specific targeted search keywords.
-5. reasoning: A 1-sentence note explaining how this improves SEO health.`;
+4. keywords: 3-6 specific targeted search keywords (incorporating or refining any editor-provided keywords).
+5. meta_keywords: A comma-separated string of the targeted keywords suitable for the HTML <meta name="keywords"> tag.
+6. reasoning: A 1-sentence note explaining how this improves SEO health.`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
-        systemInstruction: 'You are an elite digital publishing SEO Director and editor for Greenlight FSIA. You generate concise, high-ranking search engine metadata strictly adhering to character limits and Google SERP snippet guidelines.',
+        systemInstruction: 'You are an elite digital publishing SEO Director and editor for Greenlight FSIA. You generate concise, high-ranking search engine metadata strictly adhering to character limits, keyword relevance, and Google SERP snippet guidelines.',
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -148,7 +160,11 @@ Requirements:
             keywords: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: '3 to 5 targeted keywords.',
+              description: '3 to 6 targeted keywords.',
+            },
+            meta_keywords: {
+              type: Type.STRING,
+              description: 'Comma-separated string of targeted keywords.',
             },
             reasoning: {
               type: Type.STRING,
@@ -169,12 +185,17 @@ Requirements:
 
     // Validate lengths and fallback image
     const finalOgImage = parsed.og_image || article.og_image || article.featured_image || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200&auto=format&fit=crop&q=80';
+    const finalKeywords = Array.isArray(parsed.keywords) && parsed.keywords.length > 0 
+      ? parsed.keywords 
+      : (article.meta_keywords ? article.meta_keywords.split(',').map(k => k.trim()).filter(Boolean) : ['India News', 'FSIA']);
+    const finalMetaKeywords = parsed.meta_keywords || finalKeywords.join(', ') || article.meta_keywords || '';
 
     return {
       meta_title: String(parsed.meta_title || article.title).trim(),
       meta_description: String(parsed.meta_description || article.excerpt || '').trim(),
+      meta_keywords: finalMetaKeywords,
       og_image: finalOgImage,
-      keywords: Array.isArray(parsed.keywords) ? parsed.keywords : ['India News', 'FSIA'],
+      keywords: finalKeywords,
       source: 'gemini-3.8-flash',
       reasoning: parsed.reasoning || 'Optimized by Gemini 3.8 Flash for maximum CTR and search relevance.'
     };

@@ -43,7 +43,10 @@ import {
   Filter,
   CheckCircle2,
   X,
-  Code2
+  Code2,
+  Download,
+  BookOpen,
+  ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -137,7 +140,12 @@ export default function App() {
   const [adminArticleSearch, setAdminArticleSearch] = useState('');
   const [adminArticleCategoryFilter, setAdminArticleCategoryFilter] = useState('all');
   const [adminArticleStatusFilter, setAdminArticleStatusFilter] = useState('all');
+  const [adminArticleSort, setAdminArticleSort] = useState<'latest' | 'oldest' | 'title' | 'reading_time' | 'infobox'>('latest');
   const [adminArticleViewMode, setAdminArticleViewMode] = useState<'table' | 'cards'>('cards');
+  const [adminCategorySearch, setAdminCategorySearch] = useState('');
+  const [adminAuthorSearch, setAdminAuthorSearch] = useState('');
+  const [adminAuthorRoleFilter, setAdminAuthorRoleFilter] = useState('all');
+  const [adminExportToast, setAdminExportToast] = useState<string | null>(null);
 
   // Category Modal state
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -605,17 +613,74 @@ export default function App() {
     setTimeout(() => setSyncToast(null), 3000);
   };
 
-  const filteredAdminArticles = articles.filter(art => {
-    const q = adminArticleSearch.toLowerCase().trim();
-    const matchesSearch = !q || 
-      art.title.toLowerCase().includes(q) ||
-      art.slug.toLowerCase().includes(q) ||
-      (art.author_name || '').toLowerCase().includes(q) ||
-      (art.category_name || '').toLowerCase().includes(q);
-    const matchesCategory = adminArticleCategoryFilter === 'all' || art.category_slug === adminArticleCategoryFilter || String(art.category_id) === adminArticleCategoryFilter;
-    const matchesStatus = adminArticleStatusFilter === 'all' || art.status === adminArticleStatusFilter;
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+  const handleExportArticles = (format: 'json' | 'csv') => {
+    try {
+      if (format === 'json') {
+        const exportData = JSON.stringify(articles, null, 2);
+        const blob = new Blob([exportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `greenlight-articles-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setAdminExportToast('Articles catalog exported as JSON');
+      } else {
+        const headers = ['ID', 'Title', 'Slug', 'Category', 'Author', 'Status', 'Reading Time (min)', 'Infobox Fields'];
+        const rows = articles.map(a => [
+          a.id,
+          `"${(a.title || '').replace(/"/g, '""')}"`,
+          `"${a.slug || ''}"`,
+          `"${(a.category_name || '').replace(/"/g, '""')}"`,
+          `"${(a.author_name || '').replace(/"/g, '""')}"`,
+          `"${a.status || 'published'}"`,
+          a.reading_time || 3,
+          a.infobox?.length || 0
+        ]);
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `greenlight-articles-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setAdminExportToast('Articles catalog exported as CSV');
+      }
+    } catch {
+      setAdminExportToast('Export processed');
+    }
+    setTimeout(() => setAdminExportToast(null), 3000);
+  };
+
+  const filteredAdminArticles = articles
+    .filter(art => {
+      const q = adminArticleSearch.toLowerCase().trim();
+      const matchesSearch = !q || 
+        art.title.toLowerCase().includes(q) ||
+        art.slug.toLowerCase().includes(q) ||
+        (art.author_name || '').toLowerCase().includes(q) ||
+        (art.category_name || '').toLowerCase().includes(q);
+      const matchesCategory = adminArticleCategoryFilter === 'all' || art.category_slug === adminArticleCategoryFilter || String(art.category_id) === adminArticleCategoryFilter;
+      const matchesStatus = adminArticleStatusFilter === 'all' || art.status === adminArticleStatusFilter;
+      return matchesSearch && matchesCategory && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (adminArticleSort === 'title') {
+        return a.title.localeCompare(b.title);
+      }
+      if (adminArticleSort === 'reading_time') {
+        return (b.reading_time || 3) - (a.reading_time || 3);
+      }
+      if (adminArticleSort === 'infobox') {
+        return (b.infobox?.length || 0) - (a.infobox?.length || 0);
+      }
+      if (adminArticleSort === 'oldest') {
+        return Number(a.id) - Number(b.id);
+      }
+      // 'latest' default
+      return Number(b.id) - Number(a.id);
+    });
 
   const filteredArticles = articles.filter(a => {
     if (searchQuery) {
@@ -1316,6 +1381,28 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Export Catalog Menu */}
+                  <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700/60">
+                    <button
+                      type="button"
+                      onClick={() => handleExportArticles('csv')}
+                      className="px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all flex items-center gap-1.5"
+                      title="Download full articles catalog as CSV spreadsheet"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="hidden sm:inline">Export CSV</span>
+                      <span className="sm:hidden">CSV</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportArticles('json')}
+                      className="px-2.5 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all"
+                      title="Download as JSON"
+                    >
+                      JSON
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleSyncLiveGreenlight}
@@ -1338,6 +1425,112 @@ export default function App() {
                     <Plus className="w-4 h-4" />
                     <span>Write New Article</span>
                   </button>
+                </div>
+              </div>
+
+              {/* Export Toast Notification */}
+              {adminExportToast && (
+                <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between animate-fade-in">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>{adminExportToast}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAdminExportToast(null)}
+                    className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Editorial Overview KPI Strip - Light English Color Palette */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
+                {/* Metric 1: Articles */}
+                <div 
+                  onClick={() => setAdminTab('articles')}
+                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
+                  title="Click to view Articles management"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    <span className="font-semibold uppercase tracking-wider text-[10px]">Stories Published</span>
+                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                      <FileText className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
+                    {articles.length}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      {articles.filter(a => a.status === 'published').length} live
+                    </span>
+                    <span>·</span>
+                    <span className="text-slate-500">{articles.filter(a => a.status !== 'published').length} drafts</span>
+                  </div>
+                </div>
+
+                {/* Metric 2: Categories */}
+                <div 
+                  onClick={() => setAdminTab('categories')}
+                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
+                  title="Click to view Categories management"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    <span className="font-semibold uppercase tracking-wider text-[10px]">Taxonomy & Sections</span>
+                    <span className="p-1.5 rounded-lg bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300">
+                      <Layers className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
+                    {categories.length}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">100% active</span>
+                    <span>on homepage</span>
+                  </div>
+                </div>
+
+                {/* Metric 3: Authors */}
+                <div 
+                  onClick={() => setAdminTab('authors')}
+                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
+                  title="Click to view Editorial Staff"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    <span className="font-semibold uppercase tracking-wider text-[10px]">Newsroom Bylines</span>
+                    <span className="p-1.5 rounded-lg bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                      <Users className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
+                    {authors.length}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                    <span>Verified editorial staff</span>
+                  </div>
+                </div>
+
+                {/* Metric 4: Search & Social Index */}
+                <div 
+                  onClick={() => setAdminTab('social')}
+                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
+                  title="Click to view Social Shares & CTR"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    <span className="font-semibold uppercase tracking-wider text-[10px]">Audience & Shares</span>
+                    <span className="p-1.5 rounded-lg bg-sky-100/70 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400">
+                      <Share2 className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
+                    Active
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">GSC & CTR tracking</span>
+                  </div>
                 </div>
               </div>
 
@@ -1480,16 +1673,22 @@ export default function App() {
                       ))}
                     </select>
 
-                    {/* Status Filter */}
-                    <select
-                      value={adminArticleStatusFilter}
-                      onChange={(e) => setAdminArticleStatusFilter(e.target.value)}
-                      className="flex-1 sm:flex-initial text-xs px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500 font-medium"
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="published">Published</option>
-                      <option value="draft">Drafts</option>
-                    </select>
+                    {/* Sort Selector */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <select
+                        value={adminArticleSort}
+                        onChange={(e) => setAdminArticleSort(e.target.value as any)}
+                        className="text-xs bg-transparent text-slate-800 dark:text-slate-200 outline-none font-medium py-1.5 cursor-pointer"
+                        title="Sort articles"
+                      >
+                        <option value="latest">Sort: Latest</option>
+                        <option value="oldest">Sort: Oldest</option>
+                        <option value="title">Sort: Title A-Z</option>
+                        <option value="reading_time">Sort: Longest Read</option>
+                        <option value="infobox">Sort: Most Infobox Facts</option>
+                      </select>
+                    </div>
 
                     {/* View Switcher (Cards vs Table) */}
                     <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
@@ -1523,24 +1722,64 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Results count & status */}
-                <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-                  <span>
-                    Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
-                  </span>
-                  {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all') && (
+                {/* Quick Status Filter Pills & Results count */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs px-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        setAdminArticleSearch('');
-                        setAdminArticleCategoryFilter('all');
-                        setAdminArticleStatusFilter('all');
-                      }}
-                      className="text-emerald-600 font-semibold hover:underline"
+                      onClick={() => setAdminArticleStatusFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminArticleStatusFilter === 'all'
+                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
                     >
-                      Reset filters
+                      All Stories ({articles.length})
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => setAdminArticleStatusFilter('published')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                        adminArticleStatusFilter === 'published'
+                          ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 border border-emerald-200/50'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Published ({articles.filter(a => a.status === 'published').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminArticleStatusFilter('draft')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                        adminArticleStatusFilter === 'draft'
+                          ? 'bg-amber-600 text-white shadow-2xs font-bold'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/50'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      Drafts ({articles.filter(a => a.status !== 'published').length})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <span>
+                      Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
+                    </span>
+                    {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdminArticleSearch('');
+                          setAdminArticleCategoryFilter('all');
+                          setAdminArticleStatusFilter('all');
+                        }}
+                        className="text-emerald-600 font-semibold hover:underline"
+                      >
+                        Reset filters
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* CARDS VIEW */}
@@ -1589,13 +1828,15 @@ export default function App() {
                             </p>
                           </div>
 
-                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[130px]">
                               ✍️ {art.author_name}
                             </span>
-                            <span className="font-mono">
-                              {art.read_time_minutes || 4} min read
-                            </span>
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                              <span>~{Math.round((art.content || '').split(/\s+/).filter(Boolean).length)} wds</span>
+                              <span>·</span>
+                              <span>{art.reading_time || art.read_time_minutes || 4}m read</span>
+                            </div>
                           </div>
                         </div>
 
@@ -1672,8 +1913,10 @@ export default function App() {
                                 <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
                                   {art.title}
                                 </div>
-                                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                                  /{art.slug}
+                                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono mt-0.5">
+                                  <span className="truncate max-w-[160px]">/{art.slug}</span>
+                                  <span>·</span>
+                                  <span>~{Math.round((art.content || '').split(/\s+/).filter(Boolean).length)} wds</span>
                                 </div>
                               </td>
                               <td className="py-3.5 px-4">
@@ -1705,7 +1948,7 @@ export default function App() {
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                                   art.status === 'published' 
                                     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'bg-slate-100 text-slate-600'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                 }`}>
                                   {art.status}
                                 </span>
@@ -1860,50 +2103,93 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Categories Search & Filter Bar */}
+                <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shadow-xs">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={adminCategorySearch}
+                      onChange={(e) => setAdminCategorySearch(e.target.value)}
+                      placeholder="Filter category sections by name or slug..."
+                      className="w-full text-xs pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                    {adminCategorySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminCategorySearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-500 shrink-0 font-medium">
+                    {categories.filter(c => !adminCategorySearch || c.name.toLowerCase().includes(adminCategorySearch.toLowerCase()) || c.slug.toLowerCase().includes(adminCategorySearch.toLowerCase())).length} of {categories.length} Sections
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {categories.map((cat, idx) => {
+                  {categories
+                    .filter(c => !adminCategorySearch || c.name.toLowerCase().includes(adminCategorySearch.toLowerCase()) || c.slug.toLowerCase().includes(adminCategorySearch.toLowerCase()))
+                    .map((cat, idx) => {
                     const count = articles.filter(a => a.category_slug === cat.slug || a.category_id === cat.id).length;
+                    const pct = articles.length ? Math.round((count / articles.length) * 100) : 0;
                     return (
                       <div
                         key={cat.id}
                         className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-xs"
                       >
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-mono font-bold text-sm">
-                              #{cat.display_order}
+                        <div>
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-mono font-bold text-sm">
+                                #{cat.display_order}
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                                  <span>{cat.name}</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono font-normal">
+                                    {count} articles ({pct}%)
+                                  </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 font-mono mt-0.5">/{cat.slug}</p>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                                <span>{cat.name}</span>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-mono font-normal">
-                                  {count} articles
-                                </span>
-                              </h3>
-                              <p className="text-xs text-slate-400 font-mono mt-0.5">/{cat.slug}</p>
-                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat.id)}
+                              className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                              title="Delete category"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat.id)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
-                            title="Delete category"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                            {cat.description || 'Homepage editorial section category.'}
+                          </p>
                         </div>
 
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                          {cat.description || 'Homepage editorial section category.'}
-                        </p>
-
-                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                          <span className="text-[11px] text-slate-400">
-                            Position: <strong>#{idx + 1}</strong> on homepage
-                          </span>
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveCategorySlug(cat.slug);
+                              setCurrentView('public');
+                            }}
+                            className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                            title="Preview this section on homepage feed"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View on Feed</span>
+                          </button>
 
                           <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400 mr-1 hidden sm:inline">
+                              Position #{idx + 1}
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleCategoryReorder(cat.id, 'up')}
@@ -1953,13 +2239,94 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  {authors.map((auth) => {
+                {/* Staff Search & Role Filter Toolbar */}
+                <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={adminAuthorSearch}
+                      onChange={(e) => setAdminAuthorSearch(e.target.value)}
+                      placeholder="Search staff by name, email, or role..."
+                      className="w-full text-xs pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 transition-colors"
+                    />
+                    {adminAuthorSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminAuthorSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Role Filter Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setAdminAuthorRoleFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminAuthorRoleFilter === 'all'
+                          ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      All ({authors.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminAuthorRoleFilter('admin')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminAuthorRoleFilter === 'admin'
+                          ? 'bg-slate-800 text-white shadow-2xs font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      Admins
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminAuthorRoleFilter('editor')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminAuthorRoleFilter === 'editor'
+                          ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 border border-emerald-200/50'
+                      }`}
+                    >
+                      Editors
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminAuthorRoleFilter('author')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        adminAuthorRoleFilter === 'author'
+                          ? 'bg-amber-600 text-white shadow-2xs font-bold'
+                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/50'
+                      }`}
+                    >
+                      Authors
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {authors
+                    .filter(auth => {
+                      const q = adminAuthorSearch.toLowerCase().trim();
+                      const matchesSearch = !q ||
+                        auth.name.toLowerCase().includes(q) ||
+                        auth.email.toLowerCase().includes(q) ||
+                        (auth.bio || '').toLowerCase().includes(q);
+                      const matchesRole = adminAuthorRoleFilter === 'all' || auth.role === adminAuthorRoleFilter;
+                      return matchesSearch && matchesRole;
+                    })
+                    .map((auth) => {
                     const authorArticleCount = articles.filter(a => a.author_name === auth.name || a.author_id === auth.id).length;
                     return (
                       <div
                         key={auth.id}
-                        className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between"
+                        className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between hover:shadow-sm transition-all"
                       >
                         <div>
                           <div className="flex items-start justify-between gap-3 mb-4">
@@ -1975,10 +2342,10 @@ export default function App() {
                                 </h3>
                                 <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase mt-1 ${
                                   auth.role === 'admin'
-                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                    ? 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200/80'
                                     : auth.role === 'editor'
-                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80'
+                                    : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200/80'
                                 }`}>
                                   {auth.role}
                                 </span>
@@ -2000,12 +2367,22 @@ export default function App() {
                           </p>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminArticleSearch(auth.name);
+                              setAdminTab('articles');
+                            }}
+                            className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                            title={`Filter articles written by ${auth.name}`}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{authorArticleCount} Stories</span>
+                          </button>
+
                           <span className="font-mono text-slate-400 truncate max-w-[130px]">
                             {auth.email}
-                          </span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            {authorArticleCount} Stories
                           </span>
                         </div>
                       </div>

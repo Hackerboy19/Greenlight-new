@@ -109,3 +109,37 @@ export interface ContentAuditResult {
   source?: string;
 }
 
+
+/** One day of site traffic on the admin dashboard. */
+export interface TrafficPoint {
+  date: string;
+  views: number;
+  visitors: number;
+}
+
+export type ActivityAction = 'created' | 'edited' | 'submitted' | 'published' | 'unpublished' | 'deleted';
+
+/** One entry in the admin dashboard's Recent Activity feed. */
+export interface ActivityEntry {
+  id: number;
+  actor_user_id: number | null;
+  actor_name: string;
+  actor_role: string;
+  action: ActivityAction;
+  article_id: number | null;
+  article_title: string;
+  created_at: string;
+}
+
+/** GET /api/admin/dashboard */
+export interface DashboardSummary {
+  metrics: {
+    published: number;
+    pendingReview: number;
+    drafts: number;
+    scheduled: number;
+    totalViews: number;
+  };
+  traffic: { source: 'mock' | 'live'; days: TrafficPoint[] };
+  activity: ActivityEntry[];
+}

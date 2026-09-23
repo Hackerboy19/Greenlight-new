@@ -1,10 +1,21 @@
 /**
  * MySQL Connection Pool Configuration with mysql2/promise
- * Production-ready with connection resilience, connection pooling, and fallback store for development
+ *
+ * The pool is checked at startup and its state is tracked for the life of the
+ * process. When MySQL is unreachable the failure is logged as an error, the
+ * health endpoints report it, and every call to `query()` or `transaction()`
+ * throws a `DatabaseUnavailableError` (HTTP 503) instead of returning
+ * placeholder data. A background probe reconnects automatically once MySQL is
+ * reachable again.
+ *
+ * `memoryStore` below is the built-in content dataset that the public site and
+ * CMS read from. It is not a database fallback and is never returned by
+ * `query()`.
  */
 
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { AppError } from '../middlewares/errorHandler.js';
 
 dotenv.config();
 
@@ -26,62 +37,272 @@ const dbConfig = {
 };
 
 export let pool = mysql.createPool(dbConfig);
-let isDbConnected = false;
 
-// Ping to verify connection
-pool.getConnection()
-  .then((conn) => {
-    isDbConnected = true;
-    console.log(`[Database] Successfully connected to MySQL database: ${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`);
-    conn.release();
-  })
-  .catch((err) => {
-    console.warn(`[Database] Direct MySQL connection unreachable (${err.message}). Embedded in-memory store remains available.`);
+/** How often to probe MySQL again while it is unavailable. */
+const RETRY_INTERVAL_MS = 30_000;
+/** After a failed attempt, fail fast for this long instead of waiting on another connect timeout. */
+const FAST_FAIL_WINDOW_MS = 5_000;
+/** While unavailable, repeat the error log at most this often. */
+const REMINDER_INTERVAL_MS = 5 * 60_000;
+
+/** Error codes that mean "cannot reach or log in to MySQL", as opposed to a bad query. */
+const CONNECTION_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'PROTOCOL_CONNECTION_LOST',
+  'PROTOCOL_SEQUENCE_TIMEOUT',
+  'POOL_CLOSED',
+  'ER_ACCESS_DENIED_ERROR',
+  'ER_DBACCESS_DENIED_ERROR',
+  'ER_BAD_DB_ERROR',
+  'ER_CON_COUNT_ERROR',
+  'DB_UNAVAILABLE'
+]);
+
+export function isDatabaseConnectionError(err) {
+  return Boolean(err && CONNECTION_ERROR_CODES.has(err.code));
+}
+
+/**
+ * Thrown by query() and transaction() when MySQL cannot be reached.
+ * The global error handler turns it into a 503 response.
+ */
+export class DatabaseUnavailableError extends AppError {
+  constructor(cause) {
+    super(
+      'Database unavailable: the MySQL server could not be reached. Please try again shortly.',
+      503,
+      cause && cause.code ? { code: cause.code } : null
+    );
+    this.name = 'DatabaseUnavailableError';
+    this.code = 'DB_UNAVAILABLE';
+    this.cause = cause;
+  }
+}
+
+const state = {
+  status: 'connecting', // 'connecting' | 'connected' | 'unavailable'
+  errorCode: null,
+  errorMessage: null,
+  lastCheckedAt: null,
+  lastConnectedAt: null,
+  unavailableSince: null
+};
+
+let retryTimer = null;
+let lastOutageLogAt = 0;
+let inFlightCheck = null;
+
+const target = `${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`;
+
+function markConnected() {
+  const recovered = state.status === 'unavailable';
+  const now = new Date().toISOString();
+  state.status = 'connected';
+  state.errorCode = null;
+  state.errorMessage = null;
+  state.lastCheckedAt = now;
+  state.lastConnectedAt = now;
+  state.unavailableSince = null;
+  lastOutageLogAt = 0;
+  stopRetrying();
+
+  if (recovered) {
+    console.log(`[Database] MySQL connection restored: ${target}`);
+  } else {
+    console.log(`[Database] Successfully connected to MySQL database: ${target}`);
+  }
+}
+
+function markUnavailable(err) {
+  const firstFailure = state.status !== 'unavailable';
+  const now = new Date().toISOString();
+  state.status = 'unavailable';
+  state.errorCode = err && err.code ? err.code : 'UNKNOWN';
+  state.errorMessage = (err && err.message) || 'Unknown database error';
+  state.lastCheckedAt = now;
+  if (firstFailure) state.unavailableSince = now;
+
+  if (firstFailure || Date.now() - lastOutageLogAt >= REMINDER_INTERVAL_MS) {
+    lastOutageLogAt = Date.now();
+    console.error(
+      [
+        '===========================================================',
+        `  [Database] MySQL UNAVAILABLE: ${target}`,
+        `  Reason: ${state.errorCode} ${state.errorMessage}`,
+        `  Down since: ${state.unavailableSince}`,
+        '  Database-backed API calls will return 503 until it is reachable.',
+        '  GET /api/health reports "degraded"; GET /api/health/ready returns 503.',
+        `  Retrying every ${RETRY_INTERVAL_MS / 1000}s.`,
+        '==========================================================='
+      ].join('\n')
+    );
+  }
+
+  startRetrying();
+}
+
+function startRetrying() {
+  if (retryTimer) return;
+  retryTimer = setInterval(() => {
+    checkDatabaseConnection().catch(() => {});
+  }, RETRY_INTERVAL_MS);
+  // Never keep the process (or a CLI script) alive just to retry.
+  if (typeof retryTimer.unref === 'function') retryTimer.unref();
+}
+
+function stopRetrying() {
+  if (!retryTimer) return;
+  clearInterval(retryTimer);
+  retryTimer = null;
+}
+
+function timeoutAfter(ms) {
+  return new Promise((_, reject) => {
+    const t = setTimeout(() => {
+      const err = new Error(`Timed out after ${ms}ms waiting for a MySQL connection`);
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    }, ms);
+    if (typeof t.unref === 'function') t.unref();
   });
+}
+
+/**
+ * Get a pooled connection, translating connection failures into
+ * DatabaseUnavailableError and keeping the tracked state up to date.
+ */
+async function acquireConnection(timeoutMs) {
+  const recentlyFailed =
+    state.status === 'unavailable' &&
+    state.lastCheckedAt &&
+    Date.now() - Date.parse(state.lastCheckedAt) < FAST_FAIL_WINDOW_MS;
+  if (recentlyFailed) {
+    throw new DatabaseUnavailableError({ code: state.errorCode, message: state.errorMessage });
+  }
+
+  const pending = pool.getConnection();
+  try {
+    const connection = timeoutMs ? await Promise.race([pending, timeoutAfter(timeoutMs)]) : await pending;
+    if (state.status !== 'connected') markConnected();
+    return connection;
+  } catch (err) {
+    // If the timeout won the race, release the connection when it eventually arrives.
+    pending.then((c) => c.release(), () => {});
+    if (isDatabaseConnectionError(err)) {
+      markUnavailable(err);
+      throw new DatabaseUnavailableError(err);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Actively ping MySQL and update the tracked state.
+ * Never throws; returns the resulting status snapshot.
+ * @param {{ timeoutMs?: number }} [options]
+ */
+export function checkDatabaseConnection({ timeoutMs = 5_000 } = {}) {
+  if (inFlightCheck) return inFlightCheck;
+
+  inFlightCheck = (async () => {
+    let connection;
+    const pending = pool.getConnection();
+    try {
+      connection = await Promise.race([pending, timeoutAfter(timeoutMs)]);
+      await connection.ping();
+      if (state.status !== 'connected') markConnected();
+      else state.lastCheckedAt = new Date().toISOString();
+    } catch (err) {
+      if (!connection) pending.then((c) => c.release(), () => {});
+      markUnavailable(err);
+    } finally {
+      if (connection) connection.release();
+      inFlightCheck = null;
+    }
+    return getDatabaseStatus();
+  })();
+
+  return inFlightCheck;
+}
+
+/**
+ * Current tracked database state, safe to expose publicly
+ * (no host, user, or password).
+ */
+export function getDatabaseStatus() {
+  return {
+    status: state.status,
+    connected: state.status === 'connected',
+    errorCode: state.errorCode,
+    lastCheckedAt: state.lastCheckedAt,
+    lastConnectedAt: state.lastConnectedAt,
+    unavailableSince: state.unavailableSince
+  };
+}
+
+/** Resolves once the startup connection check has finished (whatever its outcome). */
+export const databaseReady = checkDatabaseConnection();
 
 /**
  * Execute a parameterized SQL query
  * @param {string} sql - SQL query string
  * @param {Array} params - Array of parameter bindings
  * @returns {Promise<Array>} Query results
+ * @throws {DatabaseUnavailableError} when MySQL cannot be reached
  */
 export async function query(sql, params = []) {
-  if (isDbConnected && pool) {
-    const [results] = await pool.execute(sql, params);
+  const connection = await acquireConnection();
+  try {
+    const [results] = await connection.execute(sql, params);
     return results;
+  } catch (err) {
+    if (isDatabaseConnectionError(err)) {
+      markUnavailable(err);
+      throw new DatabaseUnavailableError(err);
+    }
+    throw err;
+  } finally {
+    connection.release();
   }
-  // If pool is not active, return data or delegate to mock runner
-  return fallbackQueryRunner(sql, params);
 }
 
 /**
  * Execute transactions with dedicated connection
  * @param {Function} callback - Async function receiving transaction connection
+ * @throws {DatabaseUnavailableError} when MySQL cannot be reached
  */
 export async function transaction(callback) {
-  if (isDbConnected && pool) {
-    const connection = await pool.getConnection();
+  const connection = await acquireConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
     try {
-      await connection.beginTransaction();
-      const result = await callback(connection);
-      await connection.commit();
-      return result;
-    } catch (error) {
       await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
+    } catch {
+      // The connection may already be gone; the original error is what matters.
     }
+    if (isDatabaseConnectionError(error)) {
+      markUnavailable(error);
+      throw new DatabaseUnavailableError(error);
+    }
+    throw error;
+  } finally {
+    connection.release();
   }
-  // In-memory transaction emulation
-  return await callback({
-    execute: (sql, params) => fallbackQueryRunner(sql, params),
-    query: (sql, params) => fallbackQueryRunner(sql, params),
-  });
 }
 
 /**
- * Embedded data store to guarantee 100% testable uptime even before cloud SQL is provisioned
+ * Built-in content dataset served by the public site and CMS controllers.
+ * This is application data, not a database fallback: query() never reads from it.
  * Real authentic data modeled after https://greenlight.fsia.in/ (Forever Star India Awards & Greenlight Magazine)
  */
 export const memoryStore = {
@@ -593,14 +814,12 @@ export const memoryStore = {
   ]
 };
 
-function fallbackQueryRunner(sql, params) {
-  // Query simulation for in-memory operations
-  return memoryStore.articles;
-}
-
 export default {
   query,
   transaction,
   pool,
-  memoryStore
+  memoryStore,
+  checkDatabaseConnection,
+  getDatabaseStatus,
+  databaseReady
 };

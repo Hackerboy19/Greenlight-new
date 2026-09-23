@@ -24,6 +24,28 @@ export const notFoundHandler = (req, res, next) => {
 };
 
 /**
+ * MySQL error codes that mean the database cannot be reached or logged in to.
+ * Kept here (rather than imported from config/database.js) to avoid a circular import.
+ */
+const DATABASE_UNAVAILABLE_CODES = new Set([
+  'DB_UNAVAILABLE',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'PROTOCOL_CONNECTION_LOST',
+  'PROTOCOL_SEQUENCE_TIMEOUT',
+  'POOL_CLOSED',
+  'ER_ACCESS_DENIED_ERROR',
+  'ER_DBACCESS_DENIED_ERROR',
+  'ER_BAD_DB_ERROR',
+  'ER_CON_COUNT_ERROR'
+]);
+
+/**
  * Central Error Handler Middleware
  */
 export const errorHandler = (err, req, res, next) => {
@@ -38,9 +60,11 @@ export const errorHandler = (err, req, res, next) => {
   } else if (err.code === 'ER_NO_REFERENCED_ROW_2') {
     error.statusCode = 400;
     error.message = 'Foreign key constraint failed: Referenced entity does not exist.';
-  } else if (err.code === 'ECONNREFUSED') {
+  } else if (DATABASE_UNAVAILABLE_CODES.has(err.code)) {
     error.statusCode = 503;
-    error.message = 'Database service temporarily unavailable.';
+    error.message = 'Database unavailable: the MySQL server could not be reached. Please try again shortly.';
+    error.details = { code: err.code === 'DB_UNAVAILABLE' && err.cause && err.cause.code ? err.cause.code : err.code };
+    res.set('Retry-After', '30');
   }
 
   // Handle Validation errors (e.g., from Joi, Zod, or custom)
@@ -49,8 +73,11 @@ export const errorHandler = (err, req, res, next) => {
     error.message = err.message;
   }
 
-  // Log non-operational errors in non-test environments
-  if (error.statusCode >= 500 && process.env.NODE_ENV !== 'test') {
+  // Log non-operational errors in non-test environments. A database outage is
+  // already logged by config/database.js, so keep those to one line per request.
+  if (error.statusCode === 503 && DATABASE_UNAVAILABLE_CODES.has(err.code) && process.env.NODE_ENV !== 'test') {
+    console.warn(`[Database] ${req.method} ${req.originalUrl} failed with 503: database unavailable (${error.details.code}).`);
+  } else if (error.statusCode >= 500 && process.env.NODE_ENV !== 'test') {
     console.error('[Unhandled Server Error]', {
       timestamp: new Date().toISOString(),
       path: req.originalUrl,
@@ -64,7 +91,7 @@ export const errorHandler = (err, req, res, next) => {
   return res.status(error.statusCode).json({
     status: error.statusCode,
     success: false,
-    error: error.statusCode >= 500 ? 'Server Error' : 'Request Error',
+    error: error.statusCode === 503 ? 'Service Unavailable' : error.statusCode >= 500 ? 'Server Error' : 'Request Error',
     message: error.message,
     details: error.details || undefined,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })

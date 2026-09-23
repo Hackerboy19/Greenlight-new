@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
-import { WysiwygEditor } from './admin/WysiwygEditor';
+import { RichTextEditor, estimateReadingTime, countWords } from './admin/editor/RichTextEditor';
 import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
 import { GoogleSerpPreview } from './admin/GoogleSerpPreview';
 import { SeoChecklist } from './admin/SeoChecklist';
@@ -63,6 +63,31 @@ const STOCK_IMAGE_PRESETS = [
   { label: 'Skincare & Beauty', url: 'https://greenlight.fsia.in/assets/img/blog/1774854130.png' },
 ];
 
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** A URL slug from a title: lowercase ASCII words joined by hyphens. */
+export function slugify(text: string) {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
+    .replace(/-+$/, '');
+}
+
+/** Keeps typed slug text valid while leaving a trailing hyphen to type the next word. */
+function cleanSlugInput(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 120);
+}
+
 export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   isOpen,
   onClose,
@@ -76,6 +101,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 }) => {
   const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>(initialTab);
   const [title, setTitle] = useState('');
+  // The slug follows the title until someone edits it by hand.
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
   const [featuredImage, setFeaturedImage] = useState('');
@@ -87,7 +115,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [copiedTags, setCopiedTags] = useState(false);
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1);
   const [authorId, setAuthorId] = useState<number>(authors[0]?.id || 1);
-  const [status, setStatus] = useState<Article['status']>(canPublish ? 'published' : 'draft');
+  const [status, setStatus] = useState<Article['status']>('draft');
   const [isFeatured, setIsFeatured] = useState<boolean>(false);
   const [infobox, setInfobox] = useState<InfoboxItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,6 +136,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
 
     if (article) {
       setTitle(article.title || '');
+      setSlug(article.slug || slugify(article.title || ''));
+      setSlugEdited(true);
       setExcerpt(article.excerpt || '');
       setContent(article.content || '');
       setFeaturedImage(article.featured_image || '');
@@ -122,8 +152,10 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setInfobox(article.infobox || []);
     } else {
       setTitle('');
+      setSlug('');
+      setSlugEdited(false);
       setExcerpt('');
-      setContent('<h2>Key Developments</h2><p>Forever Star India Awards continues to set new national benchmarks for recognizing trailblazers across fashion, industry, and social innovation.</p><h3>National Impact & Reach</h3><p>Connecting awardees across 28 states with direct media broadcasting and verified knowledge credentials.</p>');
+      setContent('');
       const defaultImg = 'https://greenlight.fsia.in/assets/img/blog/1774683990.png';
       setFeaturedImage(defaultImg);
       setMetaTitle('');
@@ -132,7 +164,8 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setOgImage(defaultImg);
       setCategoryId(defaultCatId);
       setAuthorId(defaultAuthId);
-      setStatus(canPublish ? 'published' : 'draft');
+      // New articles start as drafts; publishing is a deliberate step.
+      setStatus('draft');
       setIsFeatured(false);
       setInfobox([
         { section: 'Overview', field_key: 'Topic Domain', field_value: 'National Talent & Media' },
@@ -285,8 +318,12 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   });
   const liveHealthConfig = SEO_STATUS_CONFIG[liveHealth.status];
 
-  // Generated slug for snippet preview
-  const previewSlug = article?.slug || (title ? title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').slice(0, 50) : 'editorial-headline-slug');
+  // Slug for previews: what will be saved, or a placeholder before there is a title.
+  const previewSlug = slug || 'editorial-headline-slug';
+  const slugValid = !slug || SLUG_PATTERN.test(slug);
+  const slugChangedOnLiveArticle = Boolean(article?.slug && slug !== article.slug && article.status === 'published');
+  const readingTime = estimateReadingTime(content);
+  const wordCount = countWords(content);
   const canonicalUrl = `https://greenlight.fsia.in/article/${previewSlug}`;
 
   // Generated HTML Meta Tags for Developer Copy
@@ -323,6 +360,11 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
       setError('Article title and main story content are required.');
       return;
     }
+    const finalSlug = slug.replace(/^-+|-+$/g, '');
+    if (!finalSlug || !SLUG_PATTERN.test(finalSlug)) {
+      setError('The URL slug may only use lowercase letters, numbers and single hyphens.');
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -330,6 +372,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
       await onSave({
         id: article?.id,
         title,
+        slug: finalSlug,
         excerpt,
         content,
         featured_image: featuredImage,
@@ -490,10 +533,64 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                   id="article-headline-input"
                   required
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    if (!slugEdited) setSlug(slugify(e.target.value));
+                  }}
                   placeholder="e.g. Forever Star India Awards Season 5 in Jaipur: A Grand Celebration"
                   className="w-full text-base font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 />
+              </div>
+
+              {/* URL slug: follows the title until edited */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="article-slug-input" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    URL slug
+                  </label>
+                  {slugEdited && title && slug !== slugify(title) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSlug(slugify(title));
+                        setSlugEdited(false);
+                      }}
+                      className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                    >
+                      Match the title
+                    </button>
+                  )}
+                </div>
+                <div
+                  className={`flex items-center rounded-xl border bg-white dark:bg-slate-800 focus-within:ring-1 ${
+                    slugValid
+                      ? 'border-slate-200 dark:border-slate-700 focus-within:border-emerald-500 focus-within:ring-emerald-500'
+                      : 'border-red-400 focus-within:ring-red-400'
+                  }`}
+                >
+                  <span className="pl-3 text-xs text-slate-400 font-mono whitespace-nowrap hidden sm:inline">greenlight.fsia.in/article/</span>
+                  <input
+                    type="text"
+                    id="article-slug-input"
+                    value={slug}
+                    onChange={(e) => {
+                      setSlug(cleanSlugInput(e.target.value));
+                      setSlugEdited(true);
+                    }}
+                    onBlur={() => setSlug((s) => s.replace(/^-+|-+$/g, ''))}
+                    placeholder="made-from-the-title"
+                    spellCheck={false}
+                    className="flex-1 min-w-0 px-3 sm:pl-0.5 py-2 bg-transparent font-mono text-sm text-slate-900 dark:text-slate-100 outline-none"
+                  />
+                </div>
+                {!slugValid && (
+                  <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">Use lowercase letters, numbers and single hyphens only.</p>
+                )}
+                {slugChangedOnLiveArticle && (
+                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                    This article is live. Changing its URL breaks links people already shared.
+                  </p>
+                )}
               </div>
 
               {/* Publication Settings Grid */}
@@ -675,16 +772,13 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <span>Story Body (Visual Rich Text Editor) *</span>
+                    <span>Story body *</span>
                   </label>
-                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                    ✨ Type and format visually — no coding required
+                  <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold tabular-nums">
+                    Estimated read time: {readingTime} min ({wordCount.toLocaleString()} words)
                   </span>
                 </div>
-                <WysiwygEditor
-                  value={content}
-                  onChange={(newHtml) => setContent(newHtml)}
-                />
+                <RichTextEditor value={content} onChange={setContent} />
               </div>
             </div>
           )}
@@ -865,7 +959,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                   document.getElementById('article-og-image-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
                 onFocusFeaturedImage={() => {
-                  setModalTab('media');
+                  setModalTab('content');
                   setTimeout(() => {
                     document.getElementById('article-featured-image-input')?.focus();
                   }, 100);
@@ -1352,7 +1446,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                   status,
                   is_featured: isFeatured,
                   views_count: article?.views_count || 150,
-                  reading_time: Math.max(1, Math.ceil((content.replace(/<[^>]+>/g, '').split(/\s+/).length) / 200)),
+                  reading_time: readingTime,
                   created_at: article?.created_at || new Date().toISOString().split('T')[0],
                   published_at: article?.published_at || new Date().toISOString().split('T')[0],
                   infobox

@@ -1,5 +1,3 @@
-import crypto from 'node:crypto';
-
-export async function hashPassword(password: string): Promise<string> {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
+// Re-exported so scripts (seed, hash-password) and the login route share one
+// hashing implementation. See password.js for the stored format.
+export { hashPassword, verifyPassword, needsRehash } from './password.js';

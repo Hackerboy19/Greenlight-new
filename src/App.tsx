@@ -46,7 +46,8 @@ import {
   Code2,
   Download,
   BookOpen,
-  ArrowUpDown
+  ArrowUpDown,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -73,6 +74,15 @@ import { SeoHealthIndicator } from './components/admin/SeoHealthIndicator';
 import { calculateSeoHealth } from './utils/seoHealth';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
+import { AdminLoginScreen } from './components/admin/AdminLoginScreen';
+import {
+  AdminSession,
+  SESSION_EXPIRED_EVENT,
+  authFetch,
+  clearSession,
+  loadSession,
+  verifySession
+} from './utils/adminAuth';
 
 // Helper for safe JSON response parsing that prevents SyntaxError on HTML error pages
 async function parseResponseJson(res: Response) {
@@ -84,9 +94,21 @@ async function parseResponseJson(res: Response) {
   return { success: res.ok, message: text };
 }
 
+const ADMIN_PATH = '/admin';
+
+function isAdminPath(pathname: string) {
+  return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
+}
+
 export default function App() {
   // App navigation state
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>('public');
+  // The Admin CMS lives at /admin; readers never see a link to it.
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(
+    () => (isAdminPath(window.location.pathname) ? 'admin' : 'public')
+  );
+  // Signed-in CMS user. The admin dashboard renders only while this is set.
+  const [adminSession, setAdminSession] = useState<AdminSession | null>(() => loadSession());
+  const [adminLoginNotice, setAdminLoginNotice] = useState<string | null>(null);
   const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [activeCategorySlug, setActiveCategorySlug] = useState<string>('all');
@@ -262,10 +284,11 @@ export default function App() {
         }
       }
 
+      // Admin datasets need a signed-in session; skip them for readers.
+      if (!loadSession()) return;
+
       // Fetch GSC Analytics
-      const gscRes = await fetch('/api/admin/gsc/performance', {
-        headers: { 'x-test-role': 'admin' }
-      });
+      const gscRes = await authFetch('/api/admin/gsc/performance');
       if (gscRes.ok) {
         const gscJson = await parseResponseJson(gscRes);
         if (gscJson?.timeSeries) {
@@ -274,9 +297,7 @@ export default function App() {
       }
 
       // Fetch GSC Rank Drops
-      const dropsRes = await fetch('/api/admin/gsc/rank-drops', {
-        headers: { 'x-test-role': 'admin' }
-      });
+      const dropsRes = await authFetch('/api/admin/gsc/rank-drops');
       if (dropsRes.ok) {
         const dropsJson = await parseResponseJson(dropsRes);
         if (dropsJson?.data) {
@@ -285,9 +306,7 @@ export default function App() {
       }
 
       // Fetch Authors
-      const authRes = await fetch('/api/admin/authors', {
-        headers: { 'x-test-role': 'admin' }
-      });
+      const authRes = await authFetch('/api/admin/authors');
       if (authRes.ok) {
         const authJson = await parseResponseJson(authRes);
         if (authJson?.data) {
@@ -299,6 +318,53 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Drop the dashboard when the server rejects the stored token (expired,
+  // revoked secret) and confirm a stored session is still valid on load.
+  useEffect(() => {
+    const handleExpired = () => {
+      setAdminSession(null);
+      setAdminLoginNotice('Your session has ended. Please sign in again.');
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+    verifySession().then((user) => {
+      if (!user) setAdminSession(null);
+    });
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+  }, []);
+
+  // Keep the address bar in step with the admin view, so /admin can be
+  // bookmarked and the browser Back button leaves the CMS.
+  useEffect(() => {
+    const onAdminPath = isAdminPath(window.location.pathname);
+    if (currentView === 'admin' && !onAdminPath) {
+      window.history.pushState(null, '', ADMIN_PATH);
+    } else if (currentView !== 'admin' && onAdminPath) {
+      window.history.pushState(null, '', '/');
+    }
+  }, [currentView]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentView(isAdminPath(window.location.pathname) ? 'admin' : 'public');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleAdminSignedIn = (session: AdminSession) => {
+    setAdminSession(session);
+    setAdminLoginNotice(null);
+    loadData();
+  };
+
+  const handleAdminSignOut = () => {
+    clearSession();
+    setAdminSession(null);
+    setAdminLoginNotice(null);
+    setIsArticleModalOpen(false);
+    setCurrentView('public');
   };
 
   useEffect(() => {
@@ -384,11 +450,10 @@ export default function App() {
     const url = isEdit ? `/api/admin/articles/${articleData.id}` : '/api/admin/articles';
     const method = isEdit ? 'PUT' : 'POST';
 
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method,
       headers: {
-        'Content-Type': 'application/json',
-        'x-test-role': 'admin'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(articleData)
     });
@@ -414,11 +479,10 @@ export default function App() {
   // AI Content Audit headline applicator
   const handleApplyHeadlineFromAudit = async (articleId: number, newHeadline: string) => {
     try {
-      const res = await fetch(`/api/admin/articles/${articleId}`, {
+      const res = await authFetch(`/api/admin/articles/${articleId}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           title: newHeadline,
@@ -439,9 +503,8 @@ export default function App() {
   // Admin Article Delete
   const handleDeleteArticle = async (id: number) => {
     if (!confirm('Are you sure you want to delete this article?')) return;
-    const res = await fetch(`/api/admin/articles/${id}`, {
-      method: 'DELETE',
-      headers: { 'x-test-role': 'admin' }
+    const res = await authFetch(`/api/admin/articles/${id}`, {
+      method: 'DELETE'
     });
     if (res.ok) {
       await loadData();
@@ -465,11 +528,10 @@ export default function App() {
     }
 
     const payload = sorted.map(c => ({ id: c.id, display_order: c.display_order }));
-    const res = await fetch('/api/admin/categories/reorder', {
+    const res = await authFetch('/api/admin/categories/reorder', {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
-        'x-test-role': 'admin'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ orders: payload })
     });
@@ -484,11 +546,10 @@ export default function App() {
     try {
       setIsSyncingGsc(true);
       setGscSyncMessage(null);
-      const res = await fetch('/api/admin/gsc/sync', {
+      const res = await authFetch('/api/admin/gsc/sync', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ siteUrl: 'sc-domain:greenlight.fsia.in' })
       });
@@ -555,11 +616,10 @@ export default function App() {
     };
 
     try {
-      const res = await fetch('/api/admin/categories', {
+      const res = await authFetch('/api/admin/categories', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(newCat)
       });
@@ -588,9 +648,8 @@ export default function App() {
   const handleDeleteCategory = async (id: number) => {
     if (!confirm('Are you sure you want to remove this category?')) return;
     try {
-      await fetch(`/api/admin/categories/${id}`, {
-        method: 'DELETE',
-        headers: { 'x-test-role': 'admin' }
+      await authFetch(`/api/admin/categories/${id}`, {
+        method: 'DELETE'
       });
     } catch (err) {
       console.warn('Delete category error:', err);
@@ -614,11 +673,10 @@ export default function App() {
     };
 
     try {
-      const res = await fetch('/api/admin/authors', {
+      const res = await authFetch('/api/admin/authors', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(newAuth)
       });
@@ -649,9 +707,8 @@ export default function App() {
   const handleDeleteAuthor = async (id: number) => {
     if (!confirm('Are you sure you want to remove this staff profile?')) return;
     try {
-      await fetch(`/api/admin/authors/${id}`, {
-        method: 'DELETE',
-        headers: { 'x-test-role': 'admin' }
+      await authFetch(`/api/admin/authors/${id}`, {
+        method: 'DELETE'
       });
     } catch (err) {
       console.warn('Delete author error:', err);
@@ -790,6 +847,8 @@ export default function App() {
               <span>{isSyncingLive ? 'Fetching Live Data...' : 'Fetch Live FSIA Data'}</span>
             </button>
 
+            {/* Only signed-in staff get a shortcut into the CMS; everyone else must know /admin. */}
+            {(adminSession || currentView === 'admin') && (
             <button
               type="button"
               onClick={() => setCurrentView(currentView === 'admin' ? 'public' : 'admin')}
@@ -807,6 +866,7 @@ export default function App() {
                 </>
               )}
             </button>
+            )}
           </div>
         </div>
       </header>
@@ -893,7 +953,7 @@ export default function App() {
               <Search className="w-5 h-5" />
             </button>
 
-            {currentView === 'admin' ? (
+            {currentView === 'admin' && adminSession ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1416,7 +1476,15 @@ export default function App() {
         )}
 
         {/* VIEW 3: ADMIN CMS DASHBOARD */}
-        {currentView === 'admin' && (
+        {currentView === 'admin' && !adminSession && (
+          <AdminLoginScreen
+            onSignedIn={handleAdminSignedIn}
+            onCancel={() => setCurrentView('public')}
+            notice={adminLoginNotice}
+          />
+        )}
+
+        {currentView === 'admin' && adminSession && (
           <div className="space-y-6">
             {/* Admin Header with Easy Guidance & Real-time Live Status */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
@@ -1429,6 +1497,23 @@ export default function App() {
                     </span>
                     <span className="text-xs text-slate-500 font-mono">
                       sc-domain:greenlight.fsia.in
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+                      <span>
+                        Signed in as <strong className="font-semibold">{adminSession.user.name}</strong>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold uppercase tracking-wide">
+                        {adminSession.user.role}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAdminSignOut}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                        title="Sign out of the Admin CMS"
+                      >
+                        <LogOut className="w-3 h-3" />
+                        <span>Sign out</span>
+                      </button>
                     </span>
                   </div>
                   <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">

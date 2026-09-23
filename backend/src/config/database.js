@@ -28,15 +28,18 @@ const dbConfig = {
 export let pool = mysql.createPool(dbConfig);
 let isDbConnected = false;
 
-// Ping to verify connection
-pool.getConnection()
+// Ping to verify connection. databaseReady settles once the check finishes,
+// so callers that must know whether MySQL is available (sign-in) can wait for it.
+export const databaseReady = pool.getConnection()
   .then((conn) => {
     isDbConnected = true;
     console.log(`[Database] Successfully connected to MySQL database: ${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`);
     conn.release();
+    return true;
   })
   .catch((err) => {
     console.warn(`[Database] Direct MySQL connection unreachable (${err.message}). Embedded in-memory store remains available.`);
+    return false;
   });
 
 /**

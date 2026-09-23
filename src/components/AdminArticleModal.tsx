@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../utils/adminAuth';
 import { 
   X, 
   Save, 
@@ -197,11 +198,10 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
     setAiSeoSuccess(false);
 
     try {
-      const res = await fetch('/api/seo/quick-fix', {
+      const res = await authFetch('/api/admin/seo/quick-fix', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           article: {

@@ -5,6 +5,7 @@
 
 import { memoryStore } from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
+import * as contentStore from '../../modules/content/contentStore.js';
 
 export async function getAllAuthors(req, res, next) {
   try {
@@ -54,6 +55,7 @@ export async function createAuthor(req, res, next) {
       avatar_url: avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
     };
 
+    await contentStore.saveAuthor(newAuthor);
     memoryStore.authors.push(newAuthor);
 
     return res.status(201).json({
@@ -85,6 +87,7 @@ export async function updateAuthor(req, res, next) {
       avatar_url: avatar_url || existing.avatar_url
     };
 
+    await contentStore.saveAuthor(updated);
     memoryStore.authors[authorIndex] = updated;
 
     return res.status(200).json({
@@ -105,6 +108,7 @@ export async function deleteAuthor(req, res, next) {
       throw new AppError(`Author #${id} not found`, 404);
     }
 
+    await contentStore.deleteAuthor(parseInt(id, 10));
     memoryStore.authors.splice(authorIndex, 1);
 
     return res.status(200).json({

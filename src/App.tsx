@@ -3,7 +3,7 @@
  * Target: https://greenlight.fsia.in/
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Globe, 
   Search, 
@@ -108,6 +108,22 @@ function isAdminPath(pathname: string) {
   return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
 }
 
+/**
+ * Reader URLs, the same as the PHP site used: /article/<slug> and
+ * /category/<slug>. The server answers these with the right title and meta
+ * tags (backend/src/seo/pages.js), so links shared or indexed keep working.
+ */
+type ReaderRoute = { kind: 'admin' } | { kind: 'article'; slug: string } | { kind: 'category'; slug: string } | { kind: 'home' };
+
+function parseReaderPath(pathname: string): ReaderRoute {
+  if (isAdminPath(pathname)) return { kind: 'admin' };
+  const match = pathname.match(/^\/(article|category)\/([A-Za-z0-9_-]+)\/?$/);
+  if (match) return { kind: match[1] as 'article' | 'category', slug: match[2] };
+  return { kind: 'home' };
+}
+
+const initialRoute = parseReaderPath(window.location.pathname);
+
 type AdminTab = 'dashboard' | 'articles' | 'media' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
 
 // Header title and one-line description for each Admin CMS screen.
@@ -125,15 +141,19 @@ const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> =
 export default function App() {
   // App navigation state
   // The Admin CMS lives at /admin; readers never see a link to it.
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(
-    () => (isAdminPath(window.location.pathname) ? 'admin' : 'public')
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(() =>
+    initialRoute.kind === 'admin' ? 'admin' : initialRoute.kind === 'article' ? 'article' : 'public'
   );
   // Signed-in CMS user. The admin dashboard renders only while this is set.
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => loadSession());
   const [adminLoginNotice, setAdminLoginNotice] = useState<string | null>(null);
-  const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(null);
+  const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(
+    initialRoute.kind === 'article' ? initialRoute.slug : null
+  );
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-  const [activeCategorySlug, setActiveCategorySlug] = useState<string>('all');
+  const [activeCategorySlug, setActiveCategorySlug] = useState<string>(
+    initialRoute.kind === 'category' ? initialRoute.slug : 'all'
+  );
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -379,20 +399,28 @@ export default function App() {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
 
-  // Keep the address bar in step with the admin view, so /admin can be
-  // bookmarked and the browser Back button leaves the CMS.
+  // Keep the address bar in step with what is on screen, so articles,
+  // categories and /admin can be bookmarked and shared, and Back works.
   useEffect(() => {
-    const onAdminPath = isAdminPath(window.location.pathname);
-    if (currentView === 'admin' && !onAdminPath) {
-      window.history.pushState(null, '', ADMIN_PATH);
-    } else if (currentView !== 'admin' && onAdminPath) {
-      window.history.pushState(null, '', '/');
-    }
-  }, [currentView]);
+    let path = window.location.pathname;
+    if (currentView === 'admin') path = ADMIN_PATH;
+    else if (currentView === 'article' && selectedArticleSlug) path = `/article/${selectedArticleSlug}`;
+    else if (currentView === 'public') path = activeCategorySlug !== 'all' && !searchQuery ? `/category/${activeCategorySlug}` : '/';
+    if (path !== window.location.pathname) window.history.pushState(null, '', path);
+  }, [currentView, selectedArticleSlug, activeCategorySlug, searchQuery]);
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentView(isAdminPath(window.location.pathname) ? 'admin' : 'public');
+      const route = parseReaderPath(window.location.pathname);
+      if (route.kind === 'admin') {
+        setCurrentView('admin');
+      } else if (route.kind === 'article') {
+        handleSelectArticleRef.current(route.slug);
+      } else {
+        setSelectedArticleSlug(null);
+        setActiveCategorySlug(route.kind === 'category' ? route.slug : 'all');
+        setCurrentView('public');
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -475,8 +503,31 @@ export default function App() {
       } else {
         setTranslatedArticle(null);
       }
+    } else {
+      // Unknown or unpublished slug: fall back to the homepage.
+      setSelectedArticleSlug(null);
+      setCurrentView('public');
     }
   };
+
+  // Lets the popstate listener, registered once, call the current version.
+  const handleSelectArticleRef = useRef(handleSelectArticle);
+  handleSelectArticleRef.current = handleSelectArticle;
+
+  // Opened at /article/<slug>: load that article.
+  useEffect(() => {
+    if (initialRoute.kind === 'article') handleSelectArticle(initialRoute.slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Browser tab title follows the article being read.
+  useEffect(() => {
+    if (currentView === 'article' && selectedArticle) {
+      document.title = selectedArticle.meta_title || `${selectedArticle.title} | Greenlight`;
+    } else if (currentView !== 'admin') {
+      document.title = 'Greenlight - International Blog & Magazine Hub | FSIA';
+    }
+  }, [currentView, selectedArticle]);
 
   // Handle search submission
   const handleSearch = async (query: string) => {

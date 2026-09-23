@@ -80,7 +80,9 @@ export const authenticateToken = (req, res, next) => {
     id: /^\d+$/.test(String(decoded.sub)) ? Number(decoded.sub) : decoded.sub,
     name: decoded.name,
     email: decoded.email,
-    role: decoded.role
+    role: decoded.role,
+    // 'database' for accounts in the users table.
+    source: decoded.src
   };
 
   // Accounts from the users table are re-checked, so a disabled account or a

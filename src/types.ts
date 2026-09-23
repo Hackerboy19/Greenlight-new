@@ -176,3 +176,21 @@ export interface DashboardSummary {
   traffic: { source: 'mock' | 'live'; days: TrafficPoint[] };
   activity: ActivityEntry[];
 }
+
+/** One image in the media library (GET /api/admin/media). */
+export interface MediaItem {
+  id: number;
+  /** Site-relative, e.g. /uploads/2026/09/ab12cd-photo.jpg */
+  url: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  width: number | null;
+  height: number | null;
+  alt_text: string;
+  caption: string;
+  credit: string;
+  uploaded_by: number | null;
+  uploader_name: string | null;
+  created_at: string;
+}

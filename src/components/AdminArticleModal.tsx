@@ -35,6 +35,8 @@ import {
 import { Article, Category, Author, InfoboxItem } from '../types';
 import { InfoboxBuilder } from './admin/InfoboxBuilder';
 import { RichTextEditor, estimateReadingTime, countWords } from './admin/editor/RichTextEditor';
+import { MediaPickerModal } from './admin/media/MediaPickerModal';
+import { absoluteMediaUrl } from './admin/media/mediaApi';
 import { PhpCodeGenerator } from './admin/PhpCodeGenerator';
 import { GoogleSerpPreview } from './admin/GoogleSerpPreview';
 import { SeoChecklist } from './admin/SeoChecklist';
@@ -52,7 +54,18 @@ export interface AdminArticleModalProps {
   canPublish?: boolean;
   /** Shown as the byline when the user can't choose one. */
   ownName?: string;
+  /** Whether the user may upload new images in the media picker. */
+  canUploadMedia?: boolean;
 }
+
+/** Where an image chosen in the media picker goes. */
+type PickerTarget = 'body' | 'featured' | 'og';
+
+const PICKER_TITLES: Record<PickerTarget, { title: string; action: string }> = {
+  body: { title: 'Insert an image into the story', action: 'Insert into story' },
+  featured: { title: 'Choose the cover image', action: 'Use as cover' },
+  og: { title: 'Choose the social sharing image', action: 'Use for sharing' }
+};
 
 const STOCK_IMAGE_PRESETS = [
   { label: 'FSIA Awards Gala', url: 'https://greenlight.fsia.in/assets/img/blog/1774683990.png' },
@@ -97,10 +110,13 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   authors = [],
   initialTab = 'content',
   canPublish = true,
+  canUploadMedia = true,
   ownName
 }) => {
   const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>(initialTab);
   const [title, setTitle] = useState('');
+  const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
+  const insertIntoBody = React.useRef<((image: { src: string; alt?: string }) => void) | null>(null);
   // The slug follows the title until someone edits it by hand.
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
@@ -681,13 +697,21 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                 </label>
                 <div className="flex gap-2">
                   <input
-                    type="url"
+                    type="text"
                     id="article-featured-image-input"
                     value={featuredImage}
                     onChange={(e) => setFeaturedImage(e.target.value)}
-                    placeholder="https://greenlight.fsia.in/assets/img/blog/..."
-                    className="flex-1 text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
+                    placeholder="Choose from the library, or paste an image link"
+                    className="flex-1 min-w-0 text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setPickerTarget('featured')}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/60 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Media library</span>
+                  </button>
                   {featuredImage && (
                     <div className="w-12 h-9 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 flex-shrink-0">
                       <img src={featuredImage} alt="Cover Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
@@ -762,7 +786,9 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                     {metaTitle || title || 'Headline Title | Greenlight FSIA'}
                   </div>
                   <div className="text-[12px] text-slate-600 dark:text-slate-400 line-clamp-2">
-                    <span className="text-slate-500 mr-1">Sep 22, 2026 —</span>
+                    <span className="text-slate-500 mr-1">
+                      {new Date(article?.published_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} —
+                    </span>
                     {metaDescription || excerpt || 'Short summary snippet will appear here...'}
                   </div>
                 </div>
@@ -778,7 +804,14 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                     Estimated read time: {readingTime} min ({wordCount.toLocaleString()} words)
                   </span>
                 </div>
-                <RichTextEditor value={content} onChange={setContent} />
+                <RichTextEditor
+                  value={content}
+                  onChange={setContent}
+                  onRequestImage={(insert) => {
+                    insertIntoBody.current = insert;
+                    setPickerTarget('body');
+                  }}
+                />
               </div>
             </div>
           )}
@@ -1161,7 +1194,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                         <ImageIcon className="w-4 h-4" />
                       </div>
                       <input
-                        type="url"
+                        type="text"
                         id="article-og-image-input"
                         value={ogImage}
                         onChange={(e) => setOgImage(e.target.value)}
@@ -1169,6 +1202,14 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                         className="w-full text-xs font-mono pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setPickerTarget('og')}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-500/60 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Media library</span>
+                    </button>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     Recommended resolution: <strong>1200 × 630 pixels</strong> (Aspect ratio 1.91:1). Used as the high-resolution hero thumbnail on Facebook, WhatsApp, LinkedIn, Twitter Cards, and Telegram.
@@ -1537,6 +1578,25 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
           </div>
         </div>
       </div>
+
+      <MediaPickerModal
+        open={pickerTarget !== null}
+        title={pickerTarget ? PICKER_TITLES[pickerTarget].title : undefined}
+        pickLabel={pickerTarget ? PICKER_TITLES[pickerTarget].action : undefined}
+        canUpload={canUploadMedia}
+        onClose={() => setPickerTarget(null)}
+        onPick={(item) => {
+          if (pickerTarget === 'body') {
+            insertIntoBody.current?.({ src: item.url, alt: item.alt_text });
+          } else if (pickerTarget === 'featured') {
+            setFeaturedImage(item.url);
+          } else if (pickerTarget === 'og') {
+            // Social sites fetch og:image from elsewhere, so it needs the full address.
+            setOgImage(absoluteMediaUrl(item.url));
+          }
+          setPickerTarget(null);
+        }}
+      />
     </div>
   );
 };

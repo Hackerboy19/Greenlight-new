@@ -4,7 +4,7 @@
  * it needs (see backend/src/modules/auth/permissions.js).
  */
 
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { authenticateToken } from '../middlewares/authMiddleware.js';
 import { requirePermission } from '../modules/auth/permissions.js';
 import { authLimiter } from '../config/security.js';
@@ -13,6 +13,8 @@ import * as categoryController from '../controllers/admin/categoryController.js'
 import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
 import * as dashboardController from '../controllers/admin/dashboardController.js';
+import * as mediaController from '../controllers/admin/mediaController.js';
+import { MAX_UPLOAD_BYTES } from '../modules/media/mediaStore.js';
 
 const router = Router();
 
@@ -40,6 +42,20 @@ router.put('/articles/:id', requirePermission('article.edit.own', 'article.edit.
 router.delete('/articles/:id', requirePermission('article.delete'), articleController.deleteArticle);
 router.post('/articles/:id/quick-fix-seo', staff, articleController.quickFixSeo);
 router.post('/seo/quick-fix', staff, articleController.quickFixSeo);
+
+/* ==========================================================================
+   Media Library (uploads are the raw image body; see mediaController.js)
+   ========================================================================== */
+router.get('/media', staff, mediaController.getMedia);
+router.post(
+  '/media',
+  requirePermission('media.upload'),
+  // Accept any Content-Type here: the controller checks the bytes themselves.
+  express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES + 1024 }),
+  mediaController.uploadMedia
+);
+router.patch('/media/:id', requirePermission('media.upload'), mediaController.patchMedia);
+router.delete('/media/:id', requirePermission('article.edit.any'), mediaController.removeMedia);
 
 /* ==========================================================================
    Category Management & Homepage Reordering (Editor, Admin)

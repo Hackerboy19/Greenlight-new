@@ -94,9 +94,18 @@ async function parseResponseJson(res: Response) {
   return { success: res.ok, message: text };
 }
 
+const ADMIN_PATH = '/admin';
+
+function isAdminPath(pathname: string) {
+  return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
+}
+
 export default function App() {
   // App navigation state
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>('public');
+  // The Admin CMS lives at /admin; readers never see a link to it.
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(
+    () => (isAdminPath(window.location.pathname) ? 'admin' : 'public')
+  );
   // Signed-in CMS user. The admin dashboard renders only while this is set.
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => loadSession());
   const [adminLoginNotice, setAdminLoginNotice] = useState<string | null>(null);
@@ -323,6 +332,25 @@ export default function App() {
       if (!user) setAdminSession(null);
     });
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
+  }, []);
+
+  // Keep the address bar in step with the admin view, so /admin can be
+  // bookmarked and the browser Back button leaves the CMS.
+  useEffect(() => {
+    const onAdminPath = isAdminPath(window.location.pathname);
+    if (currentView === 'admin' && !onAdminPath) {
+      window.history.pushState(null, '', ADMIN_PATH);
+    } else if (currentView !== 'admin' && onAdminPath) {
+      window.history.pushState(null, '', '/');
+    }
+  }, [currentView]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentView(isAdminPath(window.location.pathname) ? 'admin' : 'public');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const handleAdminSignedIn = (session: AdminSession) => {
@@ -819,6 +847,8 @@ export default function App() {
               <span>{isSyncingLive ? 'Fetching Live Data...' : 'Fetch Live FSIA Data'}</span>
             </button>
 
+            {/* Only signed-in staff get a shortcut into the CMS; everyone else must know /admin. */}
+            {(adminSession || currentView === 'admin') && (
             <button
               type="button"
               onClick={() => setCurrentView(currentView === 'admin' ? 'public' : 'admin')}
@@ -836,6 +866,7 @@ export default function App() {
                 </>
               )}
             </button>
+            )}
           </div>
         </div>
       </header>

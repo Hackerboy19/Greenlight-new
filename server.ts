@@ -3,6 +3,8 @@
  * Production-ready server binding on port 3000
  */
 
+// Must stay first: other modules need these globals while they load.
+import './backend/src/config/nodeCompat.js';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';

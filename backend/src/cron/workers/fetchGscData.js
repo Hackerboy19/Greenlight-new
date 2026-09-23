@@ -123,6 +123,7 @@ export async function fetchGscData(targetDate, siteUrl) {
 
   let persistedCount = 0;
   let databaseError = null;
+  let lastUpsertError = null;
 
   for (const row of rows) {
     const searchQuery = (row.keys && row.keys[0]) || 'unknown_query';
@@ -151,6 +152,7 @@ export async function fetchGscData(targetDate, siteUrl) {
         if (dbErr instanceof DatabaseUnavailableError) {
           databaseError = dbErr;
         } else {
+          lastUpsertError = dbErr;
           console.warn(`[GSC Worker] Upsert error for query "${searchQuery}":`, dbErr.message);
         }
       }
@@ -189,7 +191,15 @@ export async function fetchGscData(targetDate, siteUrl) {
     throw databaseError;
   }
 
-  console.log(`[GSC Worker] Successfully archived ${persistedCount} of ${rows.length} GSC records for ${dateToFetch}.`);
+  if (lastUpsertError && persistedCount === 0) {
+    console.error(`[GSC Worker] Archive FAILED for ${dateToFetch}: none of ${rows.length} records were written (${lastUpsertError.message}).`);
+    throw lastUpsertError;
+  }
+  if (lastUpsertError) {
+    console.error(`[GSC Worker] Archive PARTIAL for ${dateToFetch}: ${persistedCount} of ${rows.length} records were written; see upsert errors above.`);
+  } else {
+    console.log(`[GSC Worker] Successfully archived ${persistedCount} of ${rows.length} GSC records for ${dateToFetch}.`);
+  }
   return {
     success: true,
     property: propertyUrl,

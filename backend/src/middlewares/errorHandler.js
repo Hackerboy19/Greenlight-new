@@ -73,8 +73,11 @@ export const errorHandler = (err, req, res, next) => {
     error.message = err.message;
   }
 
-  // Log non-operational errors in non-test environments
-  if (error.statusCode >= 500 && process.env.NODE_ENV !== 'test') {
+  // Log non-operational errors in non-test environments. A database outage is
+  // already logged by config/database.js, so keep those to one line per request.
+  if (error.statusCode === 503 && DATABASE_UNAVAILABLE_CODES.has(err.code) && process.env.NODE_ENV !== 'test') {
+    console.warn(`[Database] ${req.method} ${req.originalUrl} failed with 503: database unavailable (${error.details.code}).`);
+  } else if (error.statusCode >= 500 && process.env.NODE_ENV !== 'test') {
     console.error('[Unhandled Server Error]', {
       timestamp: new Date().toISOString(),
       path: req.originalUrl,

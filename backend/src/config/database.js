@@ -42,8 +42,8 @@ export let pool = mysql.createPool(dbConfig);
 const RETRY_INTERVAL_MS = 30_000;
 /** After a failed attempt, fail fast for this long instead of waiting on another connect timeout. */
 const FAST_FAIL_WINDOW_MS = 5_000;
-/** While unavailable, repeat the error log every this many failed probes (about every 5 minutes). */
-const REMINDER_EVERY_N_PROBES = 10;
+/** While unavailable, repeat the error log at most this often. */
+const REMINDER_INTERVAL_MS = 5 * 60_000;
 
 /** Error codes that mean "cannot reach or log in to MySQL", as opposed to a bad query. */
 const CONNECTION_ERROR_CODES = new Set([
@@ -95,7 +95,7 @@ const state = {
 };
 
 let retryTimer = null;
-let failedProbes = 0;
+let lastOutageLogAt = 0;
 let inFlightCheck = null;
 
 const target = `${dbConfig.database} @ ${dbConfig.host}:${dbConfig.port}`;
@@ -109,7 +109,7 @@ function markConnected() {
   state.lastCheckedAt = now;
   state.lastConnectedAt = now;
   state.unavailableSince = null;
-  failedProbes = 0;
+  lastOutageLogAt = 0;
   stopRetrying();
 
   if (recovered) {
@@ -128,7 +128,8 @@ function markUnavailable(err) {
   state.lastCheckedAt = now;
   if (firstFailure) state.unavailableSince = now;
 
-  if (firstFailure || failedProbes % REMINDER_EVERY_N_PROBES === 0) {
+  if (firstFailure || Date.now() - lastOutageLogAt >= REMINDER_INTERVAL_MS) {
+    lastOutageLogAt = Date.now();
     console.error(
       [
         '===========================================================',
@@ -149,7 +150,6 @@ function markUnavailable(err) {
 function startRetrying() {
   if (retryTimer) return;
   retryTimer = setInterval(() => {
-    failedProbes += 1;
     checkDatabaseConnection().catch(() => {});
   }, RETRY_INTERVAL_MS);
   // Never keep the process (or a CLI script) alive just to retry.

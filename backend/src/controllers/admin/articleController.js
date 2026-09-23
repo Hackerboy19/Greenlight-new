@@ -3,7 +3,7 @@
  * Full CRUD for articles with transaction-based Wikipedia Infobox key-value persistence
  */
 
-import { query, transaction, memoryStore } from '../../config/database.js';
+import { memoryStore } from '../../config/database.js';
 import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import { generateArticleSeo } from '../../services/geminiSeoService.js';
@@ -159,13 +159,10 @@ export async function createArticle(req, res, next) {
       infobox: Array.isArray(infobox) ? infobox : []
     };
 
-    // Execute atomic transaction for article and infobox rows
-    await transaction(async (connection) => {
-      // In production SQL environment:
-      // INSERT INTO articles (title, slug, content, excerpt, ...) VALUES (...)
-      // INSERT INTO article_infobox (article_id, section_name, field_key, field_value) VALUES (?, ?, ?, ?)
-      memoryStore.articles.unshift(newArticle);
-    });
+    // Articles live in the in-memory content store, not MySQL, so saving does
+    // not depend on the database. (Future SQL: INSERT INTO articles ... and
+    // INSERT INTO article_infobox ... inside transaction().)
+    memoryStore.articles.unshift(newArticle);
 
     return res.status(201).json({
       success: true,
@@ -265,13 +262,9 @@ export async function updateArticle(req, res, next) {
       updated_at: new Date().toISOString()
     };
 
-    await transaction(async (connection) => {
-      // Production SQL:
-      // UPDATE articles SET ... WHERE id = ?
-      // DELETE FROM article_infobox WHERE article_id = ?
-      // INSERT INTO article_infobox (...) VALUES ...
-      memoryStore.articles[articleIndex] = updatedArticle;
-    });
+    // In-memory content store (see createArticle). Future SQL: UPDATE articles ...,
+    // DELETE/INSERT article_infobox ... inside transaction().
+    memoryStore.articles[articleIndex] = updatedArticle;
 
     return res.status(200).json({
       success: true,
@@ -295,9 +288,7 @@ export async function deleteArticle(req, res, next) {
       throw new AppError(`Article with ID ${id} not found`, 404);
     }
 
-    await transaction(async () => {
-      memoryStore.articles.splice(articleIndex, 1);
-    });
+    memoryStore.articles.splice(articleIndex, 1);
 
     return res.status(200).json({
       success: true,

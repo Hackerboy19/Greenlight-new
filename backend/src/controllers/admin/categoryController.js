@@ -3,7 +3,7 @@
  * CRUD and reorder logic for homepage category rows
  */
 
-import { query, transaction, memoryStore } from '../../config/database.js';
+import { memoryStore } from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 
 function generateSlug(text) {
@@ -114,16 +114,15 @@ export async function reorderCategories(req, res, next) {
       throw new AppError('Invalid payload: "orders" array containing category ID and order required.', 400);
     }
 
-    await transaction(async () => {
-      orders.forEach(({ id, display_order }) => {
-        const cat = memoryStore.categories.find(c => c.id === parseInt(id, 10));
-        if (cat) {
-          cat.display_order = parseInt(display_order, 10);
-        }
-      });
-      // Sort in-place
-      memoryStore.categories.sort((a, b) => a.display_order - b.display_order);
+    // Categories live in the in-memory content store, not MySQL.
+    orders.forEach(({ id, display_order }) => {
+      const cat = memoryStore.categories.find(c => c.id === parseInt(id, 10));
+      if (cat) {
+        cat.display_order = parseInt(display_order, 10);
+      }
     });
+    // Sort in-place
+    memoryStore.categories.sort((a, b) => a.display_order - b.display_order);
 
     return res.status(200).json({
       success: true,

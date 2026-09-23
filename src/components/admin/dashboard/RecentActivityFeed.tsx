@@ -1,11 +1,12 @@
 import React from 'react';
-import { CheckCircle2, Edit3, FilePlus2, Send, Trash2, EyeOff } from 'lucide-react';
+import { CheckCircle2, Edit3, FilePlus2, Send, Trash2, EyeOff, Undo2 } from 'lucide-react';
 import type { ActivityAction, ActivityEntry } from '../../../types';
 
 const ACTIONS: Record<ActivityAction, { verb: string; icon: React.ComponentType<{ className?: string }>; tone: string }> = {
   created: { verb: 'created a draft', icon: FilePlus2, tone: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' },
   edited: { verb: 'edited', icon: Edit3, tone: 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400' },
   submitted: { verb: 'submitted for review', icon: Send, tone: 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400' },
+  returned: { verb: 'sent back to draft', icon: Undo2, tone: 'bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-400' },
   published: { verb: 'published', icon: CheckCircle2, tone: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' },
   unpublished: { verb: 'unpublished', icon: EyeOff, tone: 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400' },
   deleted: { verb: 'deleted', icon: Trash2, tone: 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400' }

@@ -123,6 +123,29 @@ export function authorizeUpdate(user, existing, body) {
   return { status: nextStatus, authorId: undefined, isFeatured: undefined };
 }
 
+function ownsArticle(user, article) {
+  const own = ownAuthorProfile(user);
+  return Boolean(own) && Number(article.author_id) === Number(own.id);
+}
+
+/**
+ * What the signed-in user may do with one article, so the admin table only
+ * offers actions the server will accept. Mirrors authorizeUpdate/Delete.
+ */
+export function articleActionsFor(user, article) {
+  const editAny = can(user.role, 'article.edit.any');
+  const edit = editAny || (can(user.role, 'article.edit.own') && article.status === 'draft' && ownsArticle(user, article));
+  const publish = can(user.role, 'article.publish');
+  return {
+    edit,
+    submit: edit && article.status === 'draft' && can(user.role, 'article.submit'),
+    publish: edit && publish && ['draft', 'review', 'scheduled'].includes(article.status),
+    returnToDraft: editAny && article.status === 'review',
+    unpublish: edit && publish && ['published', 'scheduled', 'archived'].includes(article.status),
+    delete: can(user.role, 'article.delete')
+  };
+}
+
 /** Throws unless the user may delete the article. */
 export function authorizeDelete(user) {
   if (!can(user.role, 'article.delete')) {

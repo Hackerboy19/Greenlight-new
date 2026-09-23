@@ -8,7 +8,7 @@
 
 import { pool, databaseReady } from '../../config/database.js';
 
-export const ACTIONS = ['created', 'edited', 'submitted', 'published', 'unpublished', 'deleted'];
+export const ACTIONS = ['created', 'edited', 'submitted', 'returned', 'published', 'unpublished', 'deleted'];
 
 const MEMORY_LIMIT = 200;
 const memoryLog = [];
@@ -36,6 +36,7 @@ export function actionForStatusChange(previousStatus, nextStatus) {
   if (previousStatus === nextStatus) return 'edited';
   if (nextStatus === 'published') return 'published';
   if (nextStatus === 'review') return 'submitted';
+  if (previousStatus === 'review' && nextStatus === 'draft') return 'returned';
   if (previousStatus === 'published') return 'unpublished';
   return 'edited';
 }

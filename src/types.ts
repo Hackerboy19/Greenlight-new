@@ -28,6 +28,39 @@ export interface Article {
   updated_at?: string;
   infobox?: InfoboxItem[];
   related?: Article[];
+  /** Admin API only: what the signed-in user may do with this article. */
+  actions?: ArticleActions;
+}
+
+export interface ArticleActions {
+  edit: boolean;
+  submit: boolean;
+  publish: boolean;
+  returnToDraft: boolean;
+  unpublish: boolean;
+  delete: boolean;
+}
+
+export type ArticleSortKey =
+  | 'title'
+  | 'status'
+  | 'category'
+  | 'author'
+  | 'views'
+  | 'reading_time'
+  | 'created_at'
+  | 'updated_at'
+  | 'published_at';
+
+/** meta of GET /api/admin/articles */
+export interface ArticleListMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  sort: ArticleSortKey;
+  order: 'asc' | 'desc';
+  statusCounts: Record<Article['status'], number>;
 }
 
 export interface InfoboxItem {
@@ -117,7 +150,7 @@ export interface TrafficPoint {
   visitors: number;
 }
 
-export type ActivityAction = 'created' | 'edited' | 'submitted' | 'published' | 'unpublished' | 'deleted';
+export type ActivityAction = 'created' | 'edited' | 'submitted' | 'returned' | 'published' | 'unpublished' | 'deleted';
 
 /** One entry in the admin dashboard's Recent Activity feed. */
 export interface ActivityEntry {

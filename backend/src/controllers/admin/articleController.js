@@ -7,8 +7,31 @@ import { query, transaction, memoryStore } from '../../config/database.js';
 import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import { generateArticleSeo } from '../../services/geminiSeoService.js';
-import { authorizeCreate, authorizeUpdate, authorizeDelete } from '../../modules/auth/articlePolicy.js';
+import { authorizeCreate, authorizeUpdate, authorizeDelete, articleActionsFor } from '../../modules/auth/articlePolicy.js';
 import { recordActivity, actionForStatusChange } from '../../modules/activity/activityLog.js';
+
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Words / 200, at least one minute. Counts words in the text, not the HTML. */
+function estimateReadingTime(html) {
+  const words = String(html || '').replace(/<[^>]*>/g, ' ').split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+/**
+ * Checks a slug typed in the editor. Returns it cleaned, or throws 400 for a
+ * bad format and 409 when another article already uses it.
+ */
+function checkSlug(raw, ownId = null) {
+  const slug = String(raw).trim().toLowerCase();
+  if (!SLUG_PATTERN.test(slug) || slug.length > 200) {
+    throw new AppError('The URL slug may only use lowercase letters, numbers and single hyphens.', 400);
+  }
+  if (memoryStore.articles.some((a) => a.slug === slug && a.id !== ownId)) {
+    throw new AppError(`Another article already uses the URL "${slug}". Choose a different slug.`, 409);
+  }
+  return slug;
+}
 
 function generateSlug(text) {
   return text
@@ -19,46 +42,95 @@ function generateSlug(text) {
     .replace(/^-+|-+$/g, '');
 }
 
+// Columns the admin table can sort by. Text sorts ignore case.
+const SORTABLE = {
+  title: (a) => String(a.title || '').toLowerCase(),
+  status: (a) => String(a.status || ''),
+  category: (a) => String(a.category_name || '').toLowerCase(),
+  author: (a) => String(a.author_name || '').toLowerCase(),
+  views: (a) => Number(a.views_count) || 0,
+  reading_time: (a) => Number(a.reading_time) || 0,
+  created_at: (a) => Date.parse(a.created_at) || 0,
+  updated_at: (a) => Date.parse(a.updated_at || a.created_at) || 0,
+  published_at: (a) => Date.parse(a.published_at) || 0
+};
+
+const STATUSES = ['draft', 'review', 'published', 'scheduled', 'archived'];
+
+/** "a,b" or ["a","b"] -> ["a","b"], dropping blanks. */
+function listParam(value) {
+  const parts = Array.isArray(value) ? value : String(value ?? '').split(',');
+  return parts.map((v) => String(v).trim()).filter(Boolean);
+}
+
+function idListParam(value) {
+  return listParam(value).map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
+}
+
 /**
- * List all articles with pagination, filters, and status
+ * List articles for the admin table: paging, sorting and multi-select filters.
+ *
+ *   page, limit          1-based page, 1-100 rows (default 20)
+ *   sort, order          a SORTABLE key, asc or desc (default updated_at desc)
+ *   status               one or more statuses, comma separated
+ *   category_id          one or more category ids
+ *   author_id            one or more author ids
+ *   search               matches title, excerpt, slug or author name
+ *
+ * meta.statusCounts counts every status for the other filters, so the filter
+ * menu can show how many rows each choice would give.
  */
 export async function getAllArticles(req, res, next) {
   try {
-    const page = parseInt(req.query.page || '1', 10);
-    const limit = parseInt(req.query.limit || '10', 10);
-    const offset = (page - 1) * limit;
-    const categoryId = req.query.category_id ? parseInt(req.query.category_id, 10) : null;
-    const status = req.query.status || null;
-    const search = req.query.search || null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '20', 10) || 20, 1), 100);
+    const sortKey = SORTABLE[req.query.sort] ? req.query.sort : 'updated_at';
+    const order = String(req.query.order || '').toLowerCase() === 'asc' ? 'asc' : 'desc';
+    const statuses = listParam(req.query.status).filter((st) => STATUSES.includes(st));
+    const categoryIds = idListParam(req.query.category_id);
+    const authorIds = idListParam(req.query.author_id);
+    const search = String(req.query.search || '').trim().toLowerCase();
 
-    let articles = [...memoryStore.articles];
+    let articles = memoryStore.articles.filter((a) => {
+      if (categoryIds.length && !categoryIds.includes(Number(a.category_id))) return false;
+      if (authorIds.length && !authorIds.includes(Number(a.author_id))) return false;
+      if (search) {
+        const haystack = [a.title, a.excerpt, a.slug, a.author_name].join(' ').toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+      return true;
+    });
 
-    if (categoryId) {
-      articles = articles.filter(a => a.category_id === categoryId);
+    const statusCounts = Object.fromEntries(STATUSES.map((st) => [st, 0]));
+    for (const a of articles) {
+      if (a.status in statusCounts) statusCounts[a.status]++;
     }
-    if (status) {
-      articles = articles.filter(a => a.status === status);
+    if (statuses.length) {
+      articles = articles.filter((a) => statuses.includes(a.status));
     }
-    if (search) {
-      const q = search.toLowerCase();
-      articles = articles.filter(a => 
-        a.title.toLowerCase().includes(q) || 
-        a.excerpt.toLowerCase().includes(q)
-      );
-    }
+
+    const valueOf = SORTABLE[sortKey];
+    const direction = order === 'asc' ? 1 : -1;
+    articles.sort((x, y) => {
+      const a = valueOf(x);
+      const b = valueOf(y);
+      if (a < b) return -direction;
+      if (a > b) return direction;
+      return (Number(y.id) - Number(x.id)) * direction;
+    });
 
     const total = articles.length;
-    const paginated = articles.slice(offset, offset + limit);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(parseInt(req.query.page || '1', 10) || 1, 1), totalPages);
+    const offset = (page - 1) * limit;
+    // The table needs no article bodies; the editor loads one with GET /articles/:id.
+    const rows = articles
+      .slice(offset, offset + limit)
+      .map(({ content, infobox, ...row }) => ({ ...row, actions: articleActionsFor(req.user, row) }));
 
     return res.status(200).json({
       success: true,
-      data: paginated,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      }
+      data: rows,
+      meta: { page, limit, total, totalPages, sort: sortKey, order, statusCounts }
     });
   } catch (error) {
     next(error);
@@ -79,7 +151,7 @@ export async function getArticleById(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      data: article
+      data: { ...article, actions: articleActionsFor(req.user, article) }
     });
   } catch (error) {
     next(error);
@@ -113,14 +185,19 @@ export async function createArticle(req, res, next) {
 
     const cleanContent = sanitizeArticleHtml(content);
     const cleanExcerpt = excerpt || stripHtmlToPlainText(content, 180);
-    const readingTime = Math.max(1, Math.ceil(cleanContent.split(/\s+/).length / 200));
-    
-    // Generate unique slug
-    let baseSlug = generateSlug(title);
-    let slug = baseSlug;
-    let counter = 1;
-    while (memoryStore.articles.some(a => a.slug === slug)) {
-      slug = `${baseSlug}-${counter++}`;
+    const readingTime = estimateReadingTime(cleanContent);
+
+    // Use the slug from the editor, or make a unique one from the title.
+    let slug;
+    if (req.body.slug) {
+      slug = checkSlug(req.body.slug);
+    } else {
+      const baseSlug = generateSlug(title) || 'article';
+      slug = baseSlug;
+      let counter = 1;
+      while (memoryStore.articles.some(a => a.slug === slug)) {
+        slug = `${baseSlug}-${counter++}`;
+      }
     }
 
     const parsedCatId = parseInt(category_id, 10);
@@ -211,7 +288,8 @@ export async function updateArticle(req, res, next) {
 
     const cleanContent = content ? sanitizeArticleHtml(content) : existing.content;
     const cleanExcerpt = excerpt !== undefined ? excerpt : (content ? stripHtmlToPlainText(cleanContent, 180) : existing.excerpt);
-    const readingTime = Math.max(1, Math.ceil(cleanContent.split(/\s+/).length / 200));
+    const readingTime = estimateReadingTime(cleanContent);
+    const slug = req.body.slug && req.body.slug !== existing.slug ? checkSlug(req.body.slug, existing.id) : existing.slug;
 
     let category = existing.category_id;
     let categoryName = existing.category_name;
@@ -248,6 +326,7 @@ export async function updateArticle(req, res, next) {
     const updatedArticle = {
       ...existing,
       title: title || existing.title,
+      slug,
       excerpt: cleanExcerpt,
       content: cleanContent,
       featured_image: featured_image !== undefined ? featured_image : existing.featured_image,

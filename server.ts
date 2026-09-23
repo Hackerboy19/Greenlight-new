@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import app from './backend/src/app.js';
 import { initGscCronJob } from './backend/src/cron/gscArchiverJob.js';
@@ -46,8 +47,12 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // In production, serve static assets from dist
-    const distPath = path.join(process.cwd(), 'dist');
+    // In production, serve static assets from dist. The bundle lives in
+    // server-build/, so dist is its sibling whatever folder the host starts in.
+    const bundledDist = typeof __dirname !== 'undefined' ? path.join(__dirname, '..', 'dist') : '';
+    const distPath = bundledDist && fs.existsSync(path.join(bundledDist, 'index.html'))
+      ? bundledDist
+      : path.join(process.cwd(), 'dist');
     // index.html is sent by mountReaderPages with each page's own meta tags.
     app.use(express.static(distPath, { index: false }));
     mountReaderPages(app, distPath);
@@ -63,4 +68,7 @@ async function startServer() {
 
 startServer().catch((err) => {
   console.error('[Server Start Error]:', err);
+  // Exit so the host (e.g. Plesk) reports the failure instead of waiting on a
+  // process that never listens.
+  process.exit(1);
 });

@@ -3,18 +3,48 @@
  * Enforces JWT token validation and role-level authorization ('admin', 'editor', 'author')
  */
 
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'greenlight-production-secret-key-2026';
+const JWT_ALGORITHM = 'HS256';
+const DEFAULT_TOKEN_LIFETIME = '12h';
+
+// Development-only signing key, generated per process so no shared default
+// secret ever lives in source. Tokens signed with it stop working on restart.
+let devSecret = null;
+
+/**
+ * Returns the JWT signing secret. In production JWT_SECRET must be set; there
+ * is deliberately no fallback, because a known default lets anyone forge an
+ * admin token.
+ */
+export function getJwtSecret() {
+  const configured = process.env.JWT_SECRET;
+  if (configured && configured.length > 0) return configured;
+  if (process.env.NODE_ENV === 'production') return null;
+  if (!devSecret) {
+    devSecret = crypto.randomBytes(32).toString('hex');
+    console.warn('[Auth] JWT_SECRET is not set. Using a temporary development key; sign-ins reset when the server restarts.');
+  }
+  return devSecret;
+}
+
+function missingSecretResponse(res) {
+  return res.status(500).json({
+    status: 500,
+    error: 'Server Misconfigured',
+    message: 'Sign-in is unavailable because JWT_SECRET is not configured on the server.'
+  });
+}
 
 /**
  * Validates bearer JWT token on incoming requests
  */
 export const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') 
-    ? authHeader.split(' ')[1] 
-    : (req.query && req.query.token) || req.cookies?.token;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : null;
 
   if (!token) {
     // In dev / test mode, allow fallback admin simulation if header contains x-test-role
@@ -35,9 +65,17 @@ export const authenticateToken = (req, res, next) => {
     });
   }
 
+  const secret = getJwtSecret();
+  if (!secret) return missingSecretResponse(res);
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const decoded = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] });
+    req.user = {
+      id: /^\d+$/.test(String(decoded.sub)) ? Number(decoded.sub) : decoded.sub,
+      name: decoded.name,
+      email: decoded.email,
+      role: decoded.role
+    };
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -47,10 +85,10 @@ export const authenticateToken = (req, res, next) => {
         message: 'Your authentication session has expired. Please sign in again.'
       });
     }
-    return res.status(403).json({
-      status: 403,
-      error: 'Forbidden',
-      message: 'Invalid authorization token.'
+    return res.status(401).json({
+      status: 401,
+      error: 'Unauthorized',
+      message: 'Invalid authorization token. Please sign in again.'
     });
   }
 };
@@ -99,13 +137,24 @@ export const authorizeRole = (...requiredRoles) => {
 };
 
 /**
- * Helper to generate signed JWT tokens
+ * Signs a session token for a CMS user. Throws when no signing secret is
+ * available (production without JWT_SECRET).
+ * @param {{ id: number|string, name: string, email: string, role: string }} user
  */
-export const generateToken = (payload, expiresIn = process.env.JWT_EXPIRES_IN || '7d') => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+export const generateToken = (user, expiresIn = process.env.JWT_EXPIRES_IN || DEFAULT_TOKEN_LIFETIME) => {
+  const secret = getJwtSecret();
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured.');
+  }
+  return jwt.sign(
+    { name: user.name, email: user.email, role: user.role },
+    secret,
+    { algorithm: JWT_ALGORITHM, expiresIn, subject: String(user.id) }
+  );
 };
 
 export default {
+  getJwtSecret,
   authenticateToken,
   authorizeRole,
   generateToken

@@ -13,6 +13,16 @@ export interface AdminUser {
   name: string;
   email: string;
   role: AdminRole;
+  /** What the role may do, e.g. 'article.publish'. Sent by the server at sign-in and by /api/auth/me. */
+  permissions?: string[];
+}
+
+/**
+ * True when the user's role grants the permission. Only for showing or hiding
+ * controls: the server checks every request itself.
+ */
+export function hasPermission(user: AdminUser | null | undefined, permission: string): boolean {
+  return Boolean(user?.permissions?.includes(permission));
 }
 
 export interface AdminSession {
@@ -113,14 +123,21 @@ export async function authFetch(input: string, init: RequestInit = {}): Promise<
   return res;
 }
 
-/** Confirms the stored token with the server. Returns the user, or null when signed out. */
+/**
+ * Confirms the stored token with the server. Returns the user, or null when
+ * signed out. The stored user is refreshed, so a changed role or permission
+ * list shows up without signing in again.
+ */
 export async function verifySession(): Promise<AdminUser | null> {
   if (!loadSession()) return null;
   try {
     const res = await authFetch('/api/auth/me');
     if (!res.ok) return null;
     const body = await res.json();
-    return body?.user ?? null;
+    const user: AdminUser | null = body?.user ?? null;
+    const session = loadSession();
+    if (user && session) saveSession({ ...session, user });
+    return user;
   } catch {
     // Offline: keep the local session and let the next request decide.
     return loadSession()?.user ?? null;

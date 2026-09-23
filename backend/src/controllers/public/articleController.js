@@ -6,6 +6,7 @@
 
 import { memoryStore } from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
+import * as contentStore from '../../modules/content/contentStore.js';
 
 /**
  * Get aggregated homepage data
@@ -79,6 +80,7 @@ export async function getArticleBySlug(req, res, next) {
 
     // Increment views count
     article.views_count = (article.views_count || 0) + 1;
+    contentStore.recordView(article.id);
 
     // Fetch related articles from same category
     const related = memoryStore.articles

@@ -3,8 +3,9 @@
  * CRUD and reorder logic for homepage category rows
  */
 
-import { query, transaction, memoryStore } from '../../config/database.js';
+import { memoryStore } from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
+import * as contentStore from '../../modules/content/contentStore.js';
 
 function generateSlug(text) {
   return text
@@ -56,6 +57,7 @@ export async function createCategory(req, res, next) {
       is_active: 1
     };
 
+    await contentStore.saveCategory(newCategory);
     memoryStore.categories.push(newCategory);
 
     return res.status(201).json({
@@ -90,6 +92,7 @@ export async function updateCategory(req, res, next) {
       is_active: is_active !== undefined ? (is_active ? 1 : 0) : existing.is_active
     };
 
+    await contentStore.saveCategory(updated);
     memoryStore.categories[categoryIndex] = updated;
 
     return res.status(200).json({
@@ -114,16 +117,12 @@ export async function reorderCategories(req, res, next) {
       throw new AppError('Invalid payload: "orders" array containing category ID and order required.', 400);
     }
 
-    await transaction(async () => {
-      orders.forEach(({ id, display_order }) => {
-        const cat = memoryStore.categories.find(c => c.id === parseInt(id, 10));
-        if (cat) {
-          cat.display_order = parseInt(display_order, 10);
-        }
-      });
-      // Sort in-place
-      memoryStore.categories.sort((a, b) => a.display_order - b.display_order);
+    const reordered = memoryStore.categories.map((cat) => {
+      const change = orders.find(({ id }) => parseInt(id, 10) === cat.id);
+      return change ? { ...cat, display_order: parseInt(change.display_order, 10) } : cat;
     });
+    await contentStore.saveCategories(reordered);
+    memoryStore.categories = reordered.sort((a, b) => a.display_order - b.display_order);
 
     return res.status(200).json({
       success: true,
@@ -152,6 +151,7 @@ export async function deleteCategory(req, res, next) {
       throw new AppError('Cannot delete category with associated articles. Reassign them first.', 400);
     }
 
+    await contentStore.deleteCategory(parseInt(id, 10));
     memoryStore.categories.splice(catIndex, 1);
 
     return res.status(200).json({

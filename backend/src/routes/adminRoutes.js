@@ -12,6 +12,7 @@ import * as articleController from '../controllers/admin/articleController.js';
 import * as categoryController from '../controllers/admin/categoryController.js';
 import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
+import * as dashboardController from '../controllers/admin/dashboardController.js';
 
 const router = Router();
 
@@ -23,6 +24,11 @@ router.use(authenticateToken);
 
 // Any CMS role: reading articles, categories and authors, and SEO suggestions.
 const staff = requirePermission('article.create', 'article.edit.any');
+
+/* ==========================================================================
+   Dashboard: headline numbers, 30-day traffic and recent activity
+   ========================================================================== */
+router.get('/dashboard', staff, dashboardController.getDashboard);
 
 /* ==========================================================================
    Article Management (who may edit or publish what: modules/auth/articlePolicy.js)

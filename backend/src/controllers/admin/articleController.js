@@ -8,6 +8,7 @@ import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer
 import { AppError } from '../../middlewares/errorHandler.js';
 import { generateArticleSeo } from '../../services/geminiSeoService.js';
 import { authorizeCreate, authorizeUpdate, authorizeDelete } from '../../modules/auth/articlePolicy.js';
+import { recordActivity, actionForStatusChange } from '../../modules/activity/activityLog.js';
 
 function generateSlug(text) {
   return text
@@ -167,6 +168,7 @@ export async function createArticle(req, res, next) {
       // INSERT INTO article_infobox (article_id, section_name, field_key, field_value) VALUES (?, ?, ?, ?)
       memoryStore.articles.unshift(newArticle);
     });
+    await recordActivity(req.user, status === 'published' ? 'published' : status === 'review' ? 'submitted' : 'created', newArticle);
 
     return res.status(201).json({
       success: true,
@@ -274,6 +276,7 @@ export async function updateArticle(req, res, next) {
       // INSERT INTO article_infobox (...) VALUES ...
       memoryStore.articles[articleIndex] = updatedArticle;
     });
+    await recordActivity(req.user, actionForStatusChange(existing.status, updatedArticle.status), updatedArticle);
 
     return res.status(200).json({
       success: true,
@@ -298,9 +301,11 @@ export async function deleteArticle(req, res, next) {
       throw new AppError(`Article with ID ${id} not found`, 404);
     }
 
+    const removed = memoryStore.articles[articleIndex];
     await transaction(async () => {
       memoryStore.articles.splice(articleIndex, 1);
     });
+    await recordActivity(req.user, 'deleted', removed);
 
     return res.status(200).json({
       success: true,

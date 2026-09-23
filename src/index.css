@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/*
+ * dark: follows the operating system, unless the Admin CMS theme toggle has
+ * put .dark or .light on <html> (see src/utils/theme.ts).
+ */
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light), :root:not(.light) *) {
+      @slot;
+    }
+  }
+}
+
 :root {
   --bg-canvas: #F1F5F9;
   --text-main: #1E293B;

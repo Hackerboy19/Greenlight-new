@@ -75,6 +75,10 @@ import { calculateSeoHealth } from './utils/seoHealth';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
 import { AdminLoginScreen } from './components/admin/AdminLoginScreen';
+import { AdminShell } from './components/admin/layout/AdminShell';
+import type { AdminNavItem } from './components/admin/layout/AdminSidebar';
+import { DashboardHome } from './components/admin/dashboard/DashboardHome';
+import { useTheme } from './utils/theme';
 import {
   AdminSession,
   SESSION_EXPIRED_EVENT,
@@ -100,6 +104,19 @@ const ADMIN_PATH = '/admin';
 function isAdminPath(pathname: string) {
   return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
 }
+
+type AdminTab = 'dashboard' | 'articles' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
+
+// Header title and one-line description for each Admin CMS screen.
+const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Dashboard', subtitle: 'Publishing, traffic and what the team changed recently' },
+  articles: { title: 'Articles', subtitle: 'Write, edit and publish stories and their infoboxes' },
+  gsc: { title: 'SEO & Search Console', subtitle: 'Clicks, impressions and ranking changes from Google' },
+  social: { title: 'Social shares', subtitle: 'Shares and click-through by platform' },
+  categories: { title: 'Categories', subtitle: 'Homepage sections and their order' },
+  authors: { title: 'Editorial staff', subtitle: 'Bylines and roles' },
+  php: { title: 'PHP code generator', subtitle: 'Export the catalog as PHP for the live site' }
+};
 
 export default function App() {
   // App navigation state
@@ -158,7 +175,8 @@ export default function App() {
   };
 
   // Admin CMS Sub-tabs & Filter states
-  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php' | 'social'>('articles');
+  const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
+  const theme = useTheme();
   // Controls follow the signed-in role; the server enforces the same rules.
   const can = (permission: string) => hasPermission(adminSession?.user, permission);
   const TAB_PERMISSION: Partial<Record<typeof adminTab, string>> = {
@@ -170,7 +188,7 @@ export default function App() {
   };
   const canOpenTab = (tab: typeof adminTab) => !TAB_PERMISSION[tab] || can(TAB_PERMISSION[tab]!);
   useEffect(() => {
-    if (!canOpenTab(adminTab)) setAdminTab('articles');
+    if (!canOpenTab(adminTab)) setAdminTab('dashboard');
   });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareArticleTarget, setShareArticleTarget] = useState<Article | null>(null);
@@ -299,23 +317,27 @@ export default function App() {
       }
 
       // Admin datasets need a signed-in session; skip them for readers.
-      if (!loadSession()) return;
+      const session = loadSession();
+      if (!session) return;
 
-      // Fetch GSC Analytics
-      const gscRes = await authFetch('/api/admin/gsc/performance');
-      if (gscRes.ok) {
-        const gscJson = await parseResponseJson(gscRes);
-        if (gscJson?.timeSeries) {
-          setGscData(gscJson.timeSeries);
+      // Search Console data is only for roles that can view analytics.
+      if (hasPermission(session.user, 'analytics.view')) {
+        // Fetch GSC Analytics
+        const gscRes = await authFetch('/api/admin/gsc/performance');
+        if (gscRes.ok) {
+          const gscJson = await parseResponseJson(gscRes);
+          if (gscJson?.timeSeries) {
+            setGscData(gscJson.timeSeries);
+          }
         }
-      }
 
-      // Fetch GSC Rank Drops
-      const dropsRes = await authFetch('/api/admin/gsc/rank-drops');
-      if (dropsRes.ok) {
-        const dropsJson = await parseResponseJson(dropsRes);
-        if (dropsJson?.data) {
-          setGscRankDrops(dropsJson.data);
+        // Fetch GSC Rank Drops
+        const dropsRes = await authFetch('/api/admin/gsc/rank-drops');
+        if (dropsRes.ok) {
+          const dropsJson = await parseResponseJson(dropsRes);
+          if (dropsJson?.data) {
+            setGscRankDrops(dropsJson.data);
+          }
         }
       }
 
@@ -828,8 +850,86 @@ export default function App() {
     return true;
   });
 
+  // Signed in and on /admin: the page is the Admin CMS, without the reader site's header and footer.
+  const inAdmin = currentView === 'admin' && Boolean(adminSession);
+
+  const adminNavItems: AdminNavItem<AdminTab>[] = (
+    [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'articles', label: 'Articles', icon: FileText, group: 'Content' },
+      { id: 'categories', label: 'Categories', icon: Layers, count: categories.length, group: 'Content' },
+      { id: 'authors', label: 'Editorial staff', icon: Users, count: authors.length, group: 'Content' },
+      { id: 'gsc', label: 'SEO & Search Console', icon: Activity, group: 'Insights' },
+      { id: 'social', label: 'Social shares', icon: Share2, group: 'Insights' },
+      { id: 'php', label: 'PHP code generator', icon: Code2, group: 'Tools' }
+    ] satisfies AdminNavItem<AdminTab>[]
+  ).filter((item) => canOpenTab(item.id));
+
+  const openArticleEditorById = (articleId: number) => {
+    const article = articles.find((a) => a.id === articleId);
+    if (!article) return;
+    setEditingArticle(article);
+    setModalInitialTab('content');
+    setIsArticleModalOpen(true);
+  };
+
+  const adminHeaderActions = (
+    <>
+      {adminTab === 'articles' && (
+        <div className="hidden md:flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => handleExportArticles('csv')}
+            className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all flex items-center gap-1.5"
+            title="Download the articles catalog as a CSV spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportArticles('json')}
+            className="px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all"
+            title="Download as JSON"
+          >
+            JSON
+          </button>
+        </div>
+      )}
+      {can('settings.manage') && (
+        <button
+          type="button"
+          onClick={handleSyncLiveGreenlight}
+          disabled={isSyncingLive}
+          className="inline-flex items-center justify-center gap-2 h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-emerald-500/60 transition-colors"
+          title="Pull the latest articles from greenlight.fsia.in"
+        >
+          <RefreshCw className={`w-4 h-4 text-emerald-600 ${isSyncingLive ? 'animate-spin' : ''}`} />
+          <span className="hidden xl:inline">{isSyncingLive ? 'Syncing…' : 'Sync live data'}</span>
+        </button>
+      )}
+      {can('article.create') && (
+        <button
+          type="button"
+          onClick={() => {
+            setEditingArticle(null);
+            setModalInitialTab('content');
+            setIsArticleModalOpen(true);
+          }}
+          className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-sm active:scale-95"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">New article</span>
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-white">
+      {/* The reader site chrome is hidden inside the signed-in Admin CMS. */}
+      {!inAdmin && (
+      <>
       {/* Top Ticker & Domain Status Bar */}
       <header className="bg-slate-900 text-white text-xs border-b border-slate-800 py-1.5 px-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -1110,8 +1210,11 @@ export default function App() {
         customCta="Nominate Online"
         targetUrl="https://greenlight.fsia.in/"
       />
+      </>
+      )}
 
       {/* Main Body View Controller */}
+      {!inAdmin || !adminSession ? (
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* VIEW 1: PUBLIC HOMEPAGE / SEARCH RESULTS */}
         {currentView === 'public' && (
@@ -1498,317 +1601,51 @@ export default function App() {
             notice={adminLoginNotice}
           />
         )}
-
-        {currentView === 'admin' && adminSession && (
+      </main>
+      ) : (
+        <AdminShell
+          navItems={adminNavItems}
+          activeId={adminTab}
+          onNavigate={setAdminTab}
+          user={adminSession.user}
+          onSignOut={handleAdminSignOut}
+          onReaderView={() => setCurrentView('public')}
+          isDark={theme.isDark}
+          onToggleTheme={theme.toggle}
+          title={ADMIN_PAGE_TITLES[adminTab].title}
+          subtitle={ADMIN_PAGE_TITLES[adminTab].subtitle}
+          actions={adminHeaderActions}
+        >
           <div className="space-y-6">
-            {/* Admin Header with Easy Guidance & Real-time Live Status */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Live Editorial CMS</span>
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      sc-domain:greenlight.fsia.in
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                      <span>
-                        Signed in as <strong className="font-semibold">{adminSession.user.name}</strong>
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold uppercase tracking-wide">
-                        {adminSession.user.role}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleAdminSignOut}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                        title="Sign out of the Admin CMS"
-                      >
-                        <LogOut className="w-3 h-3" />
-                        <span>Sign out</span>
-                      </button>
-                    </span>
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Shield className="w-6 h-6 text-emerald-600 shrink-0" />
-                    <span>Greenlight Editorial & SEO Command Center</span>
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                    Visual publishing suite designed for editors and correspondents. Manage articles, Wikipedia-style infoboxes, homepage taxonomy, and Google Search Console performance.
-                  </p>
+            {/* Export Toast Notification */}
+            {adminExportToast && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>{adminExportToast}</span>
                 </div>
-
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  {/* Export Catalog Menu */}
-                  <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700/60">
-                    <button
-                      type="button"
-                      onClick={() => handleExportArticles('csv')}
-                      className="px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all flex items-center gap-1.5"
-                      title="Download full articles catalog as CSV spreadsheet"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span className="hidden sm:inline">Export CSV</span>
-                      <span className="sm:hidden">CSV</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExportArticles('json')}
-                      className="px-2.5 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all"
-                      title="Download as JSON"
-                    >
-                      JSON
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSyncLiveGreenlight}
-                    disabled={isSyncingLive}
-                    className="px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all flex items-center gap-2 shadow-2xs"
-                    title="Pull latest live articles from greenlight.fsia.in"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncingLive ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingLive ? 'Syncing...' : 'Sync Live Data'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingArticle(null);
-                      setModalInitialTab('content');
-                      setIsArticleModalOpen(true);
-                    }}
-                    className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all flex items-center gap-2 shadow-sm active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Write New Article</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminExportToast(null)}
+                  className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 text-xs"
+                >
+                  ✕
+                </button>
               </div>
+            )}
 
-              {/* Export Toast Notification */}
-              {adminExportToast && (
-                <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between animate-fade-in">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>{adminExportToast}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAdminExportToast(null)}
-                    className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Editorial Overview KPI Strip - Light English Color Palette */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                {/* Metric 1: Articles */}
-                <div 
-                  onClick={() => setAdminTab('articles')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Articles management"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Stories Published</span>
-                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                      <FileText className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {articles.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {articles.filter(a => a.status === 'published').length} live
-                    </span>
-                    <span>·</span>
-                    <span className="text-slate-500">{articles.filter(a => a.status !== 'published').length} drafts</span>
-                  </div>
-                </div>
-
-                {/* Metric 2: Categories */}
-                <div 
-                  onClick={() => setAdminTab('categories')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Categories management"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Taxonomy & Sections</span>
-                    <span className="p-1.5 rounded-lg bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300">
-                      <Layers className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {categories.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">100% active</span>
-                    <span>on homepage</span>
-                  </div>
-                </div>
-
-                {/* Metric 3: Authors */}
-                <div 
-                  onClick={() => setAdminTab('authors')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Editorial Staff"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Newsroom Bylines</span>
-                    <span className="p-1.5 rounded-lg bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-                      <Users className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {authors.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span>Verified editorial staff</span>
-                  </div>
-                </div>
-
-                {/* Metric 4: SEO Health Score */}
-                <div 
-                  onClick={() => setAdminTab('seo')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view SEO Health and Audit"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">SEO Health Avg</span>
-                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                      <Activity className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif flex items-center gap-2">
-                    <span>
-                      {Math.round(articles.reduce((acc, a) => acc + calculateSeoHealth(a).score, 0) / (articles.length || 1))}%
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-sans font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      {articles.filter(a => calculateSeoHealth(a).status === 'green').length}/{articles.length} Healthy
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Meta & OG Image check</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sub-Navigation Tabs - Auto Adjusting for Mobile/Tablet/PC */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold gap-1.5 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('articles')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'articles'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Stories ({articles.length})</span>
-                    <span className="hidden sm:inline">Articles & Stories ({articles.length})</span>
-                  </span>
-                </button>
-
-                {canOpenTab('gsc') && (
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('gsc')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'gsc'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Activity className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">SEO / GSC</span>
-                    <span className="hidden sm:inline">SEO & Search Console</span>
-                  </span>
-                </button>
-                )}
-
-                {canOpenTab('social') && (
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('social')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'social'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Share2 className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Social CTR</span>
-                    <span className="hidden sm:inline">Social Shares & CTR</span>
-                  </span>
-                </button>
-                )}
-
-                {canOpenTab('categories') && (
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('categories')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'categories'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Layers className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Sections ({categories.length})</span>
-                    <span className="hidden sm:inline">Categories ({categories.length})</span>
-                  </span>
-                </button>
-                )}
-
-                {canOpenTab('authors') && (
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('authors')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'authors'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Staff ({authors.length})</span>
-                    <span className="hidden sm:inline">Editorial Staff ({authors.length})</span>
-                  </span>
-                </button>
-                )}
-
-                {canOpenTab('php') && (
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('php')}
-                  className={`col-span-2 sm:col-span-1 min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'php'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Code2 className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">PHP Code</span>
-                    <span className="hidden sm:inline">PHP Code Generator</span>
-                  </span>
-                </button>
-                )}
-              </div>
-            </div>
+            {adminTab === 'dashboard' && (
+              <DashboardHome
+                isDark={theme.isDark}
+                refreshKey={articles}
+                onOpenArticles={(status) => {
+                  setAdminArticleStatusFilter(status || 'all');
+                  setAdminTab('articles');
+                }}
+                onOpenArticle={openArticleEditorById}
+                canOpenArticle={(id) => articles.some((a) => a.id === id)}
+              />
+            )}
 
             {/* TAB 1: ARTICLES MANAGEMENT */}
             {adminTab === 'articles' && (
@@ -1938,6 +1775,18 @@ export default function App() {
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         Drafts ({articles.filter(a => a.status !== 'published').length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminArticleStatusFilter('review')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          adminArticleStatusFilter === 'review'
+                            ? 'bg-sky-600 text-white shadow-2xs font-bold'
+                            : 'bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 hover:bg-sky-100/70 border border-sky-200/50'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                        In review ({articles.filter(a => a.status === 'review').length})
                       </button>
                     </div>
 
@@ -2666,8 +2515,8 @@ export default function App() {
               />
             )}
           </div>
-        )}
-      </main>
+        </AdminShell>
+      )}
 
       {/* Admin Article Modal */}
       <AdminArticleModal
@@ -2865,6 +2714,8 @@ export default function App() {
       )}
 
       {/* Footer */}
+      {!inAdmin && (
+      <>
       <footer className="mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-10 px-4 sm:px-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
@@ -2898,6 +2749,8 @@ export default function App() {
         customCta="Apply Now"
         targetUrl="https://greenlight.fsia.in/"
       />
+      </>
+      )}
     </div>
   );
 }

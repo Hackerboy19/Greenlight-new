@@ -11,18 +11,35 @@ import * as categoryController from '../controllers/admin/categoryController.js'
 import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
 import { generateToken } from '../middlewares/authMiddleware.js';
-import { memoryStore } from '../config/database.js';
+import { memoryStore, checkDatabaseConnection } from '../config/database.js';
 
 const router = Router();
 
-// Health Check
-router.get('/health', (req, res) => {
+// Health Check (liveness): always 200 while the process is up, but reports
+// "degraded" with database details when MySQL is unreachable.
+router.get('/health', async (req, res) => {
+  const database = await checkDatabaseConnection({ timeoutMs: 2000 });
+  res.set('Cache-Control', 'no-store');
   res.status(200).json({
-    status: 'healthy',
+    status: database.connected ? 'healthy' : 'degraded',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     service: 'Greenlight News Core API',
-    version: '1.0.0'
+    version: '1.0.0',
+    database
+  });
+});
+
+// Readiness Check: 503 when MySQL is unreachable, so load balancers and
+// uptime monitors can alert on (or route around) a missing database.
+router.get('/health/ready', async (req, res) => {
+  const database = await checkDatabaseConnection({ timeoutMs: 2000 });
+  res.set('Cache-Control', 'no-store');
+  if (!database.connected) res.set('Retry-After', '30');
+  res.status(database.connected ? 200 : 503).json({
+    status: database.connected ? 'ready' : 'unavailable',
+    timestamp: new Date().toISOString(),
+    database
   });
 });
 

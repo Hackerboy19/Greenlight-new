@@ -39,7 +39,7 @@ export function initGscCronJob() {
         lastExecutionStatus.status = 'success';
         lastExecutionStatus.recordsSynced = result.recordsSynced;
         lastExecutionStatus.error = null;
-        console.log(`[GSC Cron] Daily archival complete. ${result.recordsSynced} records written.`);
+        console.log(`[GSC Cron] Daily archival complete. ${result.recordsPersisted} records written to MySQL.`);
       } catch (err) {
         lastExecutionStatus.status = 'failed';
         lastExecutionStatus.error = err.message;

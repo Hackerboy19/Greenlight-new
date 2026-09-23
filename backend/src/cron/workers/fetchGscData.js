@@ -5,7 +5,7 @@
  */
 
 import { getSearchConsoleClient } from '../../config/googleAuth.js';
-import { query, memoryStore } from '../../config/database.js';
+import { query, memoryStore, DatabaseUnavailableError } from '../../config/database.js';
 
 /**
  * Formats a Date object to YYYY-MM-DD string
@@ -121,6 +121,9 @@ export async function fetchGscData(targetDate, siteUrl) {
       updated_at = NOW();
   `;
 
+  let persistedCount = 0;
+  let databaseError = null;
+
   for (const row of rows) {
     const searchQuery = (row.keys && row.keys[0]) || 'unknown_query';
     const pageUrl = (row.keys && row.keys[1]) || propertyUrl;
@@ -129,51 +132,70 @@ export async function fetchGscData(targetDate, siteUrl) {
     const ctr = Number((row.ctr || 0).toFixed(4));
     const position = Number((row.position || 0).toFixed(2));
 
-    try {
-      await query(upsertQuery, [
-        propertyUrl,
-        dateToFetch,
-        searchQuery,
-        pageUrl,
-        clicks,
-        impressions,
-        ctr,
-        position
-      ]);
-
-      // Also update memoryStore for continuous instant reactivity
-      const existingIdx = memoryStore.gscAnalytics.findIndex(
-        item => item.date === dateToFetch && item.query === searchQuery && item.page === pageUrl
-      );
-
-      const recordObj = {
-        date: dateToFetch,
-        query: searchQuery,
-        page: pageUrl,
-        clicks,
-        impressions,
-        ctr,
-        position
-      };
-
-      if (existingIdx >= 0) {
-        memoryStore.gscAnalytics[existingIdx] = recordObj;
-      } else {
-        memoryStore.gscAnalytics.push(recordObj);
+    // Archive to MySQL. Once the database is known to be unreachable, stop
+    // trying for the remaining rows rather than failing thousands of times.
+    if (!databaseError) {
+      try {
+        await query(upsertQuery, [
+          propertyUrl,
+          dateToFetch,
+          searchQuery,
+          pageUrl,
+          clicks,
+          impressions,
+          ctr,
+          position
+        ]);
+        persistedCount++;
+      } catch (dbErr) {
+        if (dbErr instanceof DatabaseUnavailableError) {
+          databaseError = dbErr;
+        } else {
+          console.warn(`[GSC Worker] Upsert error for query "${searchQuery}":`, dbErr.message);
+        }
       }
-
-      insertedCount++;
-    } catch (dbErr) {
-      console.warn(`[GSC Worker] Upsert error for query "${searchQuery}":`, dbErr.message);
     }
+
+    // Keep the in-memory dashboard data current either way.
+    const existingIdx = memoryStore.gscAnalytics.findIndex(
+      item => item.date === dateToFetch && item.query === searchQuery && item.page === pageUrl
+    );
+
+    const recordObj = {
+      date: dateToFetch,
+      query: searchQuery,
+      page: pageUrl,
+      clicks,
+      impressions,
+      ctr,
+      position
+    };
+
+    if (existingIdx >= 0) {
+      memoryStore.gscAnalytics[existingIdx] = recordObj;
+    } else {
+      memoryStore.gscAnalytics.push(recordObj);
+    }
+
+    insertedCount++;
   }
 
-  console.log(`[GSC Worker] Successfully synced ${insertedCount} GSC records for ${dateToFetch}.`);
+  if (databaseError) {
+    console.error(
+      `[GSC Worker] Archive FAILED for ${dateToFetch}: MySQL unavailable. ` +
+      `${persistedCount} of ${rows.length} records were written; the rest are only in memory and will be lost on restart.`
+    );
+    // Surface the outage to the cron status and the manual sync endpoint (503).
+    throw databaseError;
+  }
+
+  console.log(`[GSC Worker] Successfully archived ${persistedCount} of ${rows.length} GSC records for ${dateToFetch}.`);
   return {
     success: true,
     property: propertyUrl,
     date: dateToFetch,
-    recordsSynced: insertedCount
+    recordsSynced: insertedCount,
+    recordsPersisted: persistedCount
   };
 }
 

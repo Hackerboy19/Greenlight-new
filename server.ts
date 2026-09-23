@@ -10,6 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import app from './backend/src/app.js';
 import { initGscCronJob } from './backend/src/cron/gscArchiverJob.js';
 import { syncGreenlightLive } from './backend/src/services/greenlightSyncService.js';
+import { databaseReady } from './backend/src/config/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +49,13 @@ async function startServer() {
     console.log(`  GREENLIGHT NEWS PLATFORM (https://greenlight.fsia.in/)`);
     console.log(`  Server running at http://localhost:${PORT}`);
     console.log(`===========================================================`);
+    databaseReady.then((db) => {
+      if (db.connected) {
+        console.log('[Server] Database: connected.');
+      } else {
+        console.error(`[Server] Database: UNAVAILABLE (${db.errorCode}). Serving without MySQL; see /api/health/ready.`);
+      }
+    });
   });
 }
 

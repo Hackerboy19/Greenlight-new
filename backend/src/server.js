@@ -6,6 +6,7 @@
 import dotenv from 'dotenv';
 import app from './app.js';
 import { initGscCronJob } from './cron/gscArchiverJob.js';
+import { databaseReady } from './config/database.js';
 
 dotenv.config();
 
@@ -18,6 +19,14 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`  Express Server running on http://${HOST}:${PORT}`);
   console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`===========================================================`);
+
+  databaseReady.then((db) => {
+    if (db.connected) {
+      console.log('[Server] Database: connected.');
+    } else {
+      console.error(`[Server] Database: UNAVAILABLE (${db.errorCode}). Serving without MySQL; see /api/health/ready.`);
+    }
+  });
 
   // Initialize Search Console Archiving Cron Engine (02:00 UTC)
   initGscCronJob();

@@ -14,6 +14,25 @@ let lastExecutionStatus = {
   error: null
 };
 
+/** Runs `job` every day at `hour`:00 UTC. Returns an object with stop(). */
+function scheduleDailyUtc(hour, job) {
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = new Date();
+  let next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour);
+  if (next <= now.getTime()) next += DAY;
+  let interval = null;
+  const timeout = setTimeout(() => {
+    job();
+    interval = setInterval(job, DAY);
+  }, next - now.getTime());
+  return {
+    stop() {
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    }
+  };
+}
+
 /**
  * Initializes and starts the daily GSC archiving cron job
  */
@@ -27,30 +46,32 @@ export function initGscCronJob() {
   // '0 2 * * *'
   const CRON_EXPRESSION = '0 2 * * *';
 
-  scheduledTask = cron.schedule(
-    CRON_EXPRESSION,
-    async () => {
-      console.log('[GSC Cron] Triggering scheduled daily GSC archival job at 02:00 UTC...');
-      lastExecutionStatus.lastRun = new Date().toISOString();
-      lastExecutionStatus.status = 'running';
+  const runJob = async () => {
+    console.log('[GSC Cron] Triggering scheduled daily GSC archival job at 02:00 UTC...');
+    lastExecutionStatus.lastRun = new Date().toISOString();
+    lastExecutionStatus.status = 'running';
 
-      try {
-        const result = await fetchGscData();
-        lastExecutionStatus.status = 'success';
-        lastExecutionStatus.recordsSynced = result.recordsSynced;
-        lastExecutionStatus.error = null;
-        console.log(`[GSC Cron] Daily archival complete. ${result.recordsSynced} records written.`);
-      } catch (err) {
-        lastExecutionStatus.status = 'failed';
-        lastExecutionStatus.error = err.message;
-        console.error('[GSC Cron] Archival job error:', err.message);
-      }
-    },
-    {
-      scheduled: true,
-      timezone: 'UTC'
+    try {
+      const result = await fetchGscData();
+      lastExecutionStatus.status = 'success';
+      lastExecutionStatus.recordsSynced = result.recordsSynced;
+      lastExecutionStatus.error = null;
+      console.log(`[GSC Cron] Daily archival complete. ${result.recordsSynced} records written.`);
+    } catch (err) {
+      lastExecutionStatus.status = 'failed';
+      lastExecutionStatus.error = err.message;
+      console.error('[GSC Cron] Archival job error:', err.message);
     }
-  );
+  };
+
+  try {
+    scheduledTask = cron.schedule(CRON_EXPRESSION, runJob, { scheduled: true, timezone: 'UTC' });
+  } catch (err) {
+    // node-cron 4 needs Node 18+ time zone support. On older Node (the Plesk
+    // host runs Node 16) run the job with a plain daily timer instead.
+    console.warn('[GSC Cron] node-cron unavailable, using a daily timer instead:', err.message);
+    scheduledTask = scheduleDailyUtc(2, runJob);
+  }
 
   console.log('[GSC Cron] Initialized daily cron job (02:00 UTC) for Search Console archival.');
   return scheduledTask;

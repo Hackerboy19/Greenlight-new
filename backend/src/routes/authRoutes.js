@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import { authenticateToken, generateToken, getJwtSecret } from '../middlewares/authMiddleware.js';
 import { findUserByEmail, normalizeRole, recordSuccessfulLogin } from '../modules/auth/userStore.js';
 import { verifyPassword, getDummyHash } from '../modules/auth/password.js';
+import { permissionsFor } from '../modules/auth/permissions.js';
 
 const router = Router();
 
@@ -67,13 +68,13 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     await recordSuccessfulLogin(account, password);
 
     const user = { id: account.id, name: account.name, email: account.email, role };
-    const token = generateToken(user);
+    const token = generateToken({ ...user, source: account.source });
 
     return res.status(200).json({
       success: true,
       message: 'Signed in.',
       token,
-      user
+      user: { ...user, permissions: permissionsFor(role) }
     });
   } catch (err) {
     next(err);
@@ -82,7 +83,10 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 
 router.get('/me', authenticateToken, (req, res) => {
   const { id, name, email, role } = req.user;
-  return res.status(200).json({ success: true, user: { id, name, email, role } });
+  return res.status(200).json({
+    success: true,
+    user: { id, name, email, role, permissions: permissionsFor(role) }
+  });
 });
 
 export default router;

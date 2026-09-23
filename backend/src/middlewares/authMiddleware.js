@@ -5,6 +5,7 @@
 
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import { getLiveAccount } from '../modules/auth/userStore.js';
 
 const JWT_ALGORITHM = 'HS256';
 const DEFAULT_TOKEN_LIFETIME = '12h';
@@ -47,17 +48,6 @@ export const authenticateToken = (req, res, next) => {
     : null;
 
   if (!token) {
-    // In dev / test mode, allow fallback admin simulation if header contains x-test-role
-    if (process.env.NODE_ENV !== 'production' && req.headers['x-test-role']) {
-      req.user = {
-        id: 1,
-        name: 'Super Admin',
-        email: 'admin@greenlight.fsia.in',
-        role: req.headers['x-test-role'] || 'admin'
-      };
-      return next();
-    }
-
     return res.status(401).json({
       status: 401,
       error: 'Unauthorized',
@@ -68,15 +58,9 @@ export const authenticateToken = (req, res, next) => {
   const secret = getJwtSecret();
   if (!secret) return missingSecretResponse(res);
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] });
-    req.user = {
-      id: /^\d+$/.test(String(decoded.sub)) ? Number(decoded.sub) : decoded.sub,
-      name: decoded.name,
-      email: decoded.email,
-      role: decoded.role
-    };
-    next();
+    decoded = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] });
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
       return res.status(401).json({
@@ -91,6 +75,37 @@ export const authenticateToken = (req, res, next) => {
       message: 'Invalid authorization token. Please sign in again.'
     });
   }
+
+  req.user = {
+    id: /^\d+$/.test(String(decoded.sub)) ? Number(decoded.sub) : decoded.sub,
+    name: decoded.name,
+    email: decoded.email,
+    role: decoded.role
+  };
+
+  // Accounts from the users table are re-checked, so a disabled account or a
+  // changed role takes effect without waiting for the token to expire.
+  if (decoded.src !== 'database') return next();
+  getLiveAccount(req.user.id)
+    .then((account) => {
+      if (!account || !account.isActive || !account.role) {
+        return res.status(401).json({
+          status: 401,
+          error: 'Unauthorized',
+          message: 'This account has been disabled. Please contact an admin.'
+        });
+      }
+      req.user.role = account.role;
+      next();
+    })
+    .catch((err) => {
+      console.error(`[Auth] Could not re-check user ${req.user.id}: ${err.message}`);
+      res.status(503).json({
+        status: 503,
+        error: 'Service Unavailable',
+        message: 'Could not confirm your account right now. Please try again.'
+      });
+    });
 };
 
 /**
@@ -139,7 +154,7 @@ export const authorizeRole = (...requiredRoles) => {
 /**
  * Signs a session token for a CMS user. Throws when no signing secret is
  * available (production without JWT_SECRET).
- * @param {{ id: number|string, name: string, email: string, role: string }} user
+ * @param {{ id: number|string, name: string, email: string, role: string, source?: string }} user
  */
 export const generateToken = (user, expiresIn = process.env.JWT_EXPIRES_IN || DEFAULT_TOKEN_LIFETIME) => {
   const secret = getJwtSecret();
@@ -147,7 +162,7 @@ export const generateToken = (user, expiresIn = process.env.JWT_EXPIRES_IN || DE
     throw new Error('JWT_SECRET is not configured.');
   }
   return jwt.sign(
-    { name: user.name, email: user.email, role: user.role },
+    { name: user.name, email: user.email, role: user.role, src: user.source },
     secret,
     { algorithm: JWT_ALGORITHM, expiresIn, subject: String(user.id) }
   );

@@ -94,8 +94,7 @@ export const corsMiddleware = cors({
     'X-Requested-With',
     'Accept',
     'Origin',
-    'X-API-Key',
-    'x-test-role'
+    'X-API-Key'
   ],
   exposedHeaders: ['Content-Range', 'X-Total-Count'],
   maxAge: 86400 // 24 hours
@@ -121,15 +120,19 @@ export const apiLimiter = rateLimit({
  * Stricter Rate Limiter for Authentication & Admin Actions
  * 10 requests per minute per IP
  */
+// Signed-in admin traffic. Only failed requests (bad or missing tokens,
+// forbidden actions) count, so probing is slowed down but a busy editor
+// working through the dashboard is never locked out.
 export const authLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 30,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     status: 429,
     error: 'Too Many Requests',
-    message: 'Exceeded authentication attempts rate limit. Please try again after 60 seconds.'
+    message: 'Too many rejected requests. Please try again after 60 seconds.'
   }
 });
 

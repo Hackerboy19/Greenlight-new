@@ -80,6 +80,7 @@ import {
   SESSION_EXPIRED_EVENT,
   authFetch,
   clearSession,
+  hasPermission,
   loadSession,
   verifySession
 } from './utils/adminAuth';
@@ -158,6 +159,19 @@ export default function App() {
 
   // Admin CMS Sub-tabs & Filter states
   const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php' | 'social'>('articles');
+  // Controls follow the signed-in role; the server enforces the same rules.
+  const can = (permission: string) => hasPermission(adminSession?.user, permission);
+  const TAB_PERMISSION: Partial<Record<typeof adminTab, string>> = {
+    gsc: 'analytics.view',
+    social: 'analytics.view',
+    categories: 'category.manage',
+    authors: 'author.manage',
+    php: 'settings.manage'
+  };
+  const canOpenTab = (tab: typeof adminTab) => !TAB_PERMISSION[tab] || can(TAB_PERMISSION[tab]!);
+  useEffect(() => {
+    if (!canOpenTab(adminTab)) setAdminTab('articles');
+  });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareArticleTarget, setShareArticleTarget] = useState<Article | null>(null);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
@@ -329,7 +343,8 @@ export default function App() {
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
     verifySession().then((user) => {
-      if (!user) setAdminSession(null);
+      // Pick up role or permission changes made since the last sign-in.
+      setAdminSession((current) => (user && current ? { ...current, user } : null));
     });
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
@@ -1703,6 +1718,7 @@ export default function App() {
                   </span>
                 </button>
 
+                {canOpenTab('gsc') && (
                 <button
                   type="button"
                   onClick={() => setAdminTab('gsc')}
@@ -1718,7 +1734,9 @@ export default function App() {
                     <span className="hidden sm:inline">SEO & Search Console</span>
                   </span>
                 </button>
+                )}
 
+                {canOpenTab('social') && (
                 <button
                   type="button"
                   onClick={() => setAdminTab('social')}
@@ -1734,7 +1752,9 @@ export default function App() {
                     <span className="hidden sm:inline">Social Shares & CTR</span>
                   </span>
                 </button>
+                )}
 
+                {canOpenTab('categories') && (
                 <button
                   type="button"
                   onClick={() => setAdminTab('categories')}
@@ -1750,7 +1770,9 @@ export default function App() {
                     <span className="hidden sm:inline">Categories ({categories.length})</span>
                   </span>
                 </button>
+                )}
 
+                {canOpenTab('authors') && (
                 <button
                   type="button"
                   onClick={() => setAdminTab('authors')}
@@ -1766,7 +1788,9 @@ export default function App() {
                     <span className="hidden sm:inline">Editorial Staff ({authors.length})</span>
                   </span>
                 </button>
+                )}
 
+                {canOpenTab('php') && (
                 <button
                   type="button"
                   onClick={() => setAdminTab('php')}
@@ -1782,6 +1806,7 @@ export default function App() {
                     <span className="hidden sm:inline">PHP Code Generator</span>
                   </span>
                 </button>
+                )}
               </div>
             </div>
 
@@ -2099,6 +2124,7 @@ export default function App() {
                               <Edit3 className="w-3.5 h-3.5" />
                               <span>Edit</span>
                             </button>
+                            {can('article.delete') && (
                             <button
                               type="button"
                               onClick={() => handleDeleteArticle(art.id)}
@@ -2107,6 +2133,7 @@ export default function App() {
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2206,6 +2233,7 @@ export default function App() {
                                   >
                                     <Edit3 className="w-4 h-4" />
                                   </button>
+                                  {can('article.delete') && (
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteArticle(art.id)}
@@ -2214,6 +2242,7 @@ export default function App() {
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -2247,6 +2276,7 @@ export default function App() {
                         {gscSyncMessage}
                       </span>
                     )}
+                    {can('settings.manage') && (
                     <button
                       type="button"
                       onClick={handleTriggerGscSync}
@@ -2256,6 +2286,7 @@ export default function App() {
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGsc ? 'animate-spin' : ''}`} />
                       <span>{isSyncingGsc ? 'Syncing...' : 'Sync Search Console'}</span>
                     </button>
+                    )}
                   </div>
                 </div>
 
@@ -2651,6 +2682,8 @@ export default function App() {
         categories={categories}
         authors={authors}
         initialTab={modalInitialTab}
+        canPublish={can('article.publish')}
+        ownName={adminSession?.user.name}
       />
 
       {/* Public Multi-Platform Share Modal */}

@@ -47,7 +47,8 @@ import {
   Download,
   BookOpen,
   ArrowUpDown,
-  LogOut
+  LogOut,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -79,6 +80,7 @@ import { AdminShell } from './components/admin/layout/AdminShell';
 import type { AdminNavItem } from './components/admin/layout/AdminSidebar';
 import { DashboardHome } from './components/admin/dashboard/DashboardHome';
 import { ArticlesTable } from './components/admin/articles/ArticlesTable';
+import { MediaLibrary } from './components/admin/media/MediaLibrary';
 import { useTheme } from './utils/theme';
 import {
   AdminSession,
@@ -106,12 +108,13 @@ function isAdminPath(pathname: string) {
   return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
 }
 
-type AdminTab = 'dashboard' | 'articles' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
+type AdminTab = 'dashboard' | 'articles' | 'media' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
 
 // Header title and one-line description for each Admin CMS screen.
 const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Publishing, traffic and what the team changed recently' },
   articles: { title: 'Articles', subtitle: 'Write, edit and publish stories and their infoboxes' },
+  media: { title: 'Media library', subtitle: 'Upload images and describe them for readers and Google' },
   gsc: { title: 'SEO & Search Console', subtitle: 'Clicks, impressions and ranking changes from Google' },
   social: { title: 'Social shares', subtitle: 'Shares and click-through by platform' },
   categories: { title: 'Categories', subtitle: 'Homepage sections and their order' },
@@ -827,6 +830,7 @@ export default function App() {
     [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'articles', label: 'Articles', icon: FileText, group: 'Content' },
+      { id: 'media', label: 'Media library', icon: ImageIcon, group: 'Content' },
       { id: 'categories', label: 'Categories', icon: Layers, count: categories.length, group: 'Content' },
       { id: 'authors', label: 'Editorial staff', icon: Users, count: authors.length, group: 'Content' },
       { id: 'gsc', label: 'SEO & Search Console', icon: Activity, group: 'Insights' },
@@ -1645,6 +1649,15 @@ export default function App() {
               />
             )}
 
+            {/* MEDIA LIBRARY */}
+            {adminTab === 'media' && (
+              <MediaLibrary
+                canUpload={can('media.upload')}
+                canDelete={can('article.edit.any')}
+                onNotice={showAdminNotice}
+              />
+            )}
+
             {/* TAB 2: GOOGLE SEARCH CONSOLE ANALYTICS & RANK DROPS */}
             {adminTab === 'gsc' && (
               <div className="space-y-6">
@@ -2072,6 +2085,7 @@ export default function App() {
         authors={authors}
         initialTab={modalInitialTab}
         canPublish={can('article.publish')}
+        canUploadMedia={can('media.upload')}
         ownName={adminSession?.user.name}
       />
 

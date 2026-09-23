@@ -24,7 +24,19 @@ export const allowedArticleAttributes = {
   th: ['colspan', 'rowspan', 'scope', 'class'],
   td: ['colspan', 'rowspan', 'class'],
   blockquote: ['cite', 'class'],
+  // Only text-align survives in style (see allowedStyles): the editor's alignment buttons.
+  p: ['style', 'class'],
+  h1: ['style', 'class'],
+  h2: ['style', 'class'],
+  h3: ['style', 'class'],
+  h4: ['style', 'class'],
+  h5: ['style', 'class'],
+  h6: ['style', 'class'],
   '*': ['class', 'id', 'data-*']
+};
+
+export const allowedArticleStyles = {
+  '*': { 'text-align': [/^(left|right|center|justify)$/] }
 };
 
 export const sanitizeArticleHtml = (dirtyHtml) => {
@@ -35,6 +47,7 @@ export const sanitizeArticleHtml = (dirtyHtml) => {
   return sanitizeHtml(dirtyHtml, {
     allowedTags: allowedArticleTags,
     allowedAttributes: allowedArticleAttributes,
+    allowedStyles: allowedArticleStyles,
     allowedSchemes: ['http', 'https', 'mailto', 'tel'],
     allowedSchemesByTag: {
       img: ['data', 'http', 'https']

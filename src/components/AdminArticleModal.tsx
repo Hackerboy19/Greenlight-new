@@ -420,7 +420,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-slate-100">
+              <h2 className="font-serif text-lg font-black tracking-tight text-ink dark:text-slate-100">
                 {article ? 'Edit Story & Search Optimization' : 'Create New Editorial Story'}
               </h2>
               <p className="text-xs text-slate-500">Non-technical visual editor • SEO metadata • Wikipedia factsheet</p>
@@ -554,7 +554,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                     if (!slugEdited) setSlug(slugify(e.target.value));
                   }}
                   placeholder="e.g. Forever Star India Awards Season 5 in Jaipur: A Grand Celebration"
-                  className="w-full text-base font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  className="w-full font-serif text-xl sm:text-2xl font-black tracking-tight leading-tight px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-ink dark:text-slate-100 placeholder:text-slate-300 dark:placeholder:text-slate-600 placeholder:font-bold outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                 />
               </div>
 

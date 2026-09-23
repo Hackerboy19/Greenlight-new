@@ -70,13 +70,8 @@ export function AdminSidebar<Id extends string>({
         aria-label="Admin navigation"
       >
         <div className="h-16 px-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <GreenLightLogo variant="icon" size="sm" className="shrink-0" />
-            <div className="min-w-0">
-              <div className="text-sm font-black text-slate-900 dark:text-slate-100 truncate">Greenlight</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Admin CMS</div>
-            </div>
-          </div>
+          {/* The same lockup as the reader site's header, with the CMS named underneath. */}
+          <GreenLightLogo variant="horizontal" size="sm" subtitle="Admin CMS" className="min-w-0" />
           <button
             type="button"
             onClick={onClose}
@@ -91,7 +86,7 @@ export function AdminSidebar<Id extends string>({
           {groups.map((group) => (
             <div key={group.name || 'main'}>
               {group.name && (
-                <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-700/70 dark:text-brand-400/70">
                   {group.name}
                 </div>
               )}
@@ -107,20 +102,20 @@ export function AdminSidebar<Id extends string>({
                           onClose();
                         }}
                         aria-current={active ? 'page' : undefined}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                        className={`w-full min-h-[40px] flex items-center gap-3 px-3.5 py-2 rounded-full text-sm transition-all active:scale-[0.98] ${
                           active
-                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
-                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                            ? 'bg-brand-600 text-white font-bold shadow-card ring-2 ring-brand-500/20'
+                            : 'font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
                         }`}
                       >
                         <Icon className="w-4 h-4 shrink-0" />
                         <span className="flex-1 text-left truncate">{label}</span>
                         {count !== undefined && (
                           <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                               active
-                                ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                ? 'bg-white/20 text-white'
+                                : 'bg-brand-100 dark:bg-brand-950 text-brand-800 dark:text-brand-300'
                             }`}
                           >
                             {count}
@@ -137,7 +132,7 @@ export function AdminSidebar<Id extends string>({
 
         <div className="p-3 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-3 px-2 py-2">
-            <div className="w-9 h-9 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center shrink-0 ring-2 ring-brand-500/20">
               {initials(user.name || user.email) || '?'}
             </div>
             <div className="flex-1 min-w-0">

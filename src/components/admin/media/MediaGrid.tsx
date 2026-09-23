@@ -45,12 +45,12 @@ export const MediaGrid: React.FC<MediaGridProps> = ({ items, selectedId, onSelec
               aria-label={item.alt_text || item.file_name}
               title={item.alt_text || item.file_name}
               className={`group relative block w-full aspect-square rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 transition ${
-                selected ? 'ring-3 ring-emerald-500' : 'hover:ring-2 hover:ring-slate-300 dark:hover:ring-slate-600'
+                selected ? 'ring-3 ring-brand-500' : 'hover:ring-2 hover:ring-slate-300 dark:hover:ring-slate-600'
               }`}
             >
               <img src={item.url} alt="" loading="lazy" className="w-full h-full object-cover" />
               {selected && (
-                <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow">
+                <span className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center shadow">
                   <Check className="w-4 h-4" />
                 </span>
               )}

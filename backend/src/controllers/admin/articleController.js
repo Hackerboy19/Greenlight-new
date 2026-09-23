@@ -3,7 +3,8 @@
  * Full CRUD for articles with transaction-based Wikipedia Infobox key-value persistence
  */
 
-import { query, transaction, memoryStore } from '../../config/database.js';
+import { memoryStore } from '../../config/database.js';
+import * as contentStore from '../../modules/content/contentStore.js';
 import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import { generateArticleSeo } from '../../services/geminiSeoService.js';
@@ -239,12 +240,9 @@ export async function createArticle(req, res, next) {
     };
 
     // Execute atomic transaction for article and infobox rows
-    await transaction(async (connection) => {
-      // In production SQL environment:
-      // INSERT INTO articles (title, slug, content, excerpt, ...) VALUES (...)
-      // INSERT INTO article_infobox (article_id, section_name, field_key, field_value) VALUES (?, ?, ?, ?)
-      memoryStore.articles.unshift(newArticle);
-    });
+    // MySQL first (article and infobox rows in one transaction), then the cache.
+    await contentStore.saveArticle(newArticle);
+    memoryStore.articles.unshift(newArticle);
     await recordActivity(req.user, status === 'published' ? 'published' : status === 'review' ? 'submitted' : 'created', newArticle);
 
     return res.status(201).json({
@@ -348,13 +346,8 @@ export async function updateArticle(req, res, next) {
       updated_at: new Date().toISOString()
     };
 
-    await transaction(async (connection) => {
-      // Production SQL:
-      // UPDATE articles SET ... WHERE id = ?
-      // DELETE FROM article_infobox WHERE article_id = ?
-      // INSERT INTO article_infobox (...) VALUES ...
-      memoryStore.articles[articleIndex] = updatedArticle;
-    });
+    await contentStore.saveArticle(updatedArticle);
+    memoryStore.articles[articleIndex] = updatedArticle;
     await recordActivity(req.user, actionForStatusChange(existing.status, updatedArticle.status), updatedArticle);
 
     return res.status(200).json({
@@ -381,9 +374,8 @@ export async function deleteArticle(req, res, next) {
     }
 
     const removed = memoryStore.articles[articleIndex];
-    await transaction(async () => {
-      memoryStore.articles.splice(articleIndex, 1);
-    });
+    await contentStore.deleteArticle(removed.id);
+    memoryStore.articles.splice(articleIndex, 1);
     await recordActivity(req.user, 'deleted', removed);
 
     return res.status(200).json({
@@ -438,6 +430,7 @@ export async function quickFixSeo(req, res, next) {
         og_image: generated.og_image || memoryStore.articles[articleIndex].og_image || memoryStore.articles[articleIndex].featured_image,
         updated_at: new Date().toISOString()
       };
+      await contentStore.saveArticle(updatedArticle);
       memoryStore.articles[articleIndex] = updatedArticle;
 
       return res.status(200).json({

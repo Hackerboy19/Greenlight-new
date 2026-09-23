@@ -4,6 +4,7 @@
  */
 
 import { memoryStore } from '../config/database.js';
+import * as contentStore from '../modules/content/contentStore.js';
 
 const GREENLIGHT_BASE = 'https://greenlight.fsia.in';
 
@@ -316,6 +317,37 @@ export async function syncGreenlightLive() {
       const article = await fetchLiveArticle(item);
       article.id = i + 1;
       fetchedArticles.push(article);
+    }
+
+    // Once content is saved in MySQL, a sync only adds what is missing: it never
+    // overwrites or removes articles, categories or authors edited in the CMS.
+    if (contentStore.isPersistent()) {
+      const newCategories = GREENLIGHT_CATEGORIES.filter(
+        (c) => !memoryStore.categories.some((m) => m.id === c.id || m.slug === c.slug)
+      );
+      const newAuthors = GREENLIGHT_AUTHORS.filter((a) => !memoryStore.authors.some((m) => m.id === a.id));
+      const baseId = Date.now();
+      const newArticles = fetchedArticles
+        .filter((a) => !memoryStore.articles.some((m) => m.slug === a.slug))
+        .map((a, i) => ({ ...a, id: baseId + i }));
+
+      for (const c of newCategories) await contentStore.saveCategory(c);
+      memoryStore.categories.push(...newCategories);
+      for (const a of newAuthors) await contentStore.saveAuthor(a);
+      memoryStore.authors.push(...newAuthors);
+      for (const a of newArticles) await contentStore.saveArticle(a);
+      memoryStore.articles.unshift(...newArticles);
+
+      const duration = Date.now() - startTime;
+      console.log(`[Greenlight Crawler] Added ${newArticles.length} new articles from greenlight.fsia.in in ${duration}ms; existing articles were left as they are.`);
+      return {
+        success: true,
+        articlesCount: newArticles.length,
+        categoriesCount: newCategories.length,
+        mode: 'add-missing',
+        syncedAt: new Date().toISOString(),
+        durationMs: duration
+      };
     }
 
     // Update in-memory store

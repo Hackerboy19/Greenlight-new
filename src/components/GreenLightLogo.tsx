@@ -5,13 +5,16 @@ interface GreenLightLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   showSubtitle?: boolean;
+  /** Line under the wordmark in the horizontal variant. */
+  subtitle?: string;
 }
 
 export const GreenLightLogo: React.FC<GreenLightLogoProps> = ({
   variant = 'horizontal',
   size = 'md',
   className = '',
-  showSubtitle = true
+  showSubtitle = true,
+  subtitle = 'INTERNATIONAL BLOG / MAGAZINE'
 }) => {
   // Size mapping
   const sizeMap = {
@@ -119,7 +122,7 @@ export const GreenLightLogo: React.FC<GreenLightLogoProps> = ({
         </div>
         {showSubtitle && (
           <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/70 font-semibold tracking-wider uppercase mt-1 leading-none font-sans">
-            INTERNATIONAL BLOG / MAGAZINE
+            {subtitle}
           </p>
         )}
       </div>

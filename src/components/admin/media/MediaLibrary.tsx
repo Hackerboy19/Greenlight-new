@@ -89,7 +89,7 @@ export const MediaLibrary: React.FC<MediaLibraryProps> = ({ canUpload, canDelete
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by file name, alt text or caption"
             aria-label="Search images"
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-brand-500"
           />
         </div>
 

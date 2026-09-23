@@ -89,7 +89,7 @@ function ToolbarButton({
       onClick={onClick}
       className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors disabled:opacity-35 disabled:pointer-events-none ${
         active
-          ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+          ? 'bg-brand-100 dark:bg-brand-900/60 text-brand-800 dark:text-brand-300'
           : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700'
       }`}
     >
@@ -213,7 +213,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     content: value || '',
     editorProps: {
       attributes: {
-        class: 'prose max-w-none min-h-[320px] px-5 py-4 outline-none text-slate-800 dark:text-slate-200',
+        // Same classes as the public article body (#article-wysiwyg-content in App.tsx),
+        // so what editors type looks exactly like the published story.
+        class:
+          'prose prose-slate dark:prose-invert max-w-none min-h-[320px] px-5 sm:px-8 py-6 outline-none text-slate-800 dark:text-slate-200 leading-relaxed font-serif text-base space-y-4',
         'aria-label': 'Article body',
         role: 'textbox',
         'aria-multiline': 'true'
@@ -286,11 +289,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   return (
-    <div className={`rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden focus-within:border-emerald-500 ${className}`}>
+    <div className={`rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden focus-within:border-brand-500 ${className}`}>
       <Toolbar editor={editor} sourceMode={sourceMode} onToggleSource={toggleSource} onPrompt={openPrompt} />
 
       {prompt && (
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-emerald-50/60 dark:bg-emerald-950/30 text-xs">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-slate-200 dark:border-slate-700 bg-brand-50/60 dark:bg-brand-950/30 text-xs">
           <span className="font-semibold text-slate-700 dark:text-slate-200">{prompt.kind === 'link' ? 'Link to' : 'Image address'}</span>
           <input
             autoFocus
@@ -305,7 +308,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               if (e.key === 'Escape') setPrompt(null);
             }}
             placeholder={prompt.kind === 'link' ? 'https://example.com' : 'https://…/photo.jpg'}
-            className="flex-1 min-w-[12rem] h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
+            className="flex-1 min-w-[12rem] h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-brand-500"
           />
           {prompt.kind === 'image' && (
             <input
@@ -313,10 +316,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               value={prompt.alt}
               onChange={(e) => setPrompt({ ...prompt, alt: e.target.value })}
               placeholder="Describe the image (alt text)"
-              className="flex-1 min-w-[10rem] h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
+              className="flex-1 min-w-[10rem] h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-brand-500"
             />
           )}
-          <button type="button" onClick={applyPrompt} className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
+          <button type="button" onClick={applyPrompt} className="h-8 px-3 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-bold">
             {prompt.kind === 'link' ? (prompt.url ? 'Apply' : 'Remove link') : 'Insert'}
           </button>
           <button type="button" onClick={() => setPrompt(null)} className="h-8 px-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-semibold">
@@ -334,7 +337,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           spellCheck={false}
           aria-label="Article HTML"
-          className="block w-full min-h-[320px] px-5 py-4 font-mono text-xs leading-relaxed bg-slate-950 text-emerald-200 outline-none resize-y"
+          className="block w-full min-h-[320px] px-5 py-4 font-mono text-xs leading-relaxed bg-slate-950 text-brand-200 outline-none resize-y"
         />
       ) : (
         <EditorContent editor={editor} className="rich-text-editor" />

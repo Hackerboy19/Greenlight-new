@@ -76,11 +76,11 @@ export const MediaDropzone: React.FC<MediaDropzoneProps> = ({ onUploaded, compac
           compact ? 'px-4 py-5' : 'px-6 py-10'
         } ${
           dragging
-            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
-            : 'border-slate-300 dark:border-slate-700 hover:border-emerald-400 bg-slate-50/60 dark:bg-slate-800/30'
+            ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40'
+            : 'border-slate-300 dark:border-slate-700 hover:border-brand-400 bg-slate-50/60 dark:bg-slate-800/30'
         }`}
       >
-        <UploadCloud className={`text-emerald-600 dark:text-emerald-400 ${compact ? 'w-6 h-6' : 'w-9 h-9'}`} />
+        <UploadCloud className={`text-brand-600 dark:text-brand-400 ${compact ? 'w-6 h-6' : 'w-9 h-9'}`} />
         <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
           {dragging ? 'Drop to upload' : 'Drag images here, or click to choose'}
         </div>
@@ -105,16 +105,16 @@ export const MediaDropzone: React.FC<MediaDropzoneProps> = ({ onUploaded, compac
               {row.error ? (
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
               ) : row.done ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-brand-500" />
               ) : (
-                <span className="w-4 h-4 shrink-0 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+                <span className="w-4 h-4 shrink-0 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
               )}
               <span className="truncate max-w-[12rem] text-slate-700 dark:text-slate-200">{row.name}</span>
               {row.error ? (
                 <span className="text-red-600 dark:text-red-400">{row.error}</span>
               ) : (
                 <span className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                  <span className="block h-full bg-emerald-500 transition-all" style={{ width: `${Math.round(row.progress * 100)}%` }} />
+                  <span className="block h-full bg-brand-500 transition-all" style={{ width: `${Math.round(row.progress * 100)}%` }} />
                 </span>
               )}
             </li>

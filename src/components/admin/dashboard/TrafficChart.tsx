@@ -1,6 +1,7 @@
 import React from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import type { TrafficPoint } from '../../../types';
+import { Card, SectionHeading } from '../ui';
 
 export interface TrafficChartProps {
   data: TrafficPoint[];
@@ -24,20 +25,20 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({ data, isDark, source
   const totalViews = data.reduce((sum, d) => sum + d.views, 0);
 
   return (
-    <section className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Traffic over 30 days</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {loading ? 'Loading…' : `${full.format(totalViews)} page views`}
-          </p>
-        </div>
-        {source === 'mock' && (
-          <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-            Sample data
-          </span>
-        )}
-      </div>
+    <Card as="section">
+      <SectionHeading
+        level="h3"
+        className="mb-4"
+        title="Traffic over 30 days"
+        subtitle={loading ? 'Loading…' : `${full.format(totalViews)} page views`}
+        action={
+          source === 'mock' && (
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-amber-500/30 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300">
+              Sample data
+            </span>
+          )
+        }
+      />
 
       <div className="h-72">
         {loading ? (
@@ -81,6 +82,6 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({ data, isDark, source
           </ResponsiveContainer>
         )}
       </div>
-    </section>
+    </Card>
   );
 };

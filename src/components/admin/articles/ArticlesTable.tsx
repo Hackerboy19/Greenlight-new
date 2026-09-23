@@ -29,7 +29,7 @@ const WORKFLOW: Record<
   { label: string; done: string; icon: React.ComponentType<{ className?: string }>; status?: Article['status']; tone: string }
 > = {
   submit: { label: 'Submit for review', done: 'submitted for review', icon: Send, status: 'review', tone: 'text-amber-700 dark:text-amber-400' },
-  publish: { label: 'Publish', done: 'published', icon: CheckCircle2, status: 'published', tone: 'text-emerald-700 dark:text-emerald-400' },
+  publish: { label: 'Publish', done: 'published', icon: CheckCircle2, status: 'published', tone: 'text-brand-700 dark:text-brand-400' },
   returnToDraft: { label: 'Send back to draft', done: 'sent back to draft', icon: Undo2, status: 'draft', tone: 'text-violet-700 dark:text-violet-400' },
   unpublish: { label: 'Unpublish', done: 'moved to draft', icon: EyeOff, status: 'draft', tone: 'text-orange-700 dark:text-orange-400' },
   delete: { label: 'Delete', done: 'deleted', icon: Trash2, tone: 'text-red-600 dark:text-red-400' }
@@ -210,7 +210,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search title, slug or author"
             aria-label="Search articles"
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500"
+            className="w-full h-10 pl-9 pr-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 shadow-card outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -226,7 +226,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                 setCategoryIds([]);
                 setAuthorIds([]);
               }}
-              className="h-9 inline-flex items-center gap-1 px-2.5 text-xs font-semibold text-slate-500 hover:text-red-600"
+              className="h-10 inline-flex items-center gap-1 px-2.5 text-xs font-semibold text-slate-500 hover:text-red-600"
             >
               <X className="w-3.5 h-3.5" /> Clear filters
             </button>
@@ -249,11 +249,11 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+      <div className="rounded-card border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-card overflow-hidden">
         {/* Bulk actions for the selected rows */}
         {selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-100 dark:border-emerald-900/60 text-xs">
-            <span className="font-bold text-emerald-900 dark:text-emerald-200 mr-1">{selected.size} selected</span>
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-brand-50 dark:bg-brand-950/40 border-b border-brand-100 dark:border-brand-900/60 text-xs">
+            <span className="font-bold text-brand-900 dark:text-brand-200 mr-1">{selected.size} selected</span>
             {bulkActions.length === 0 && (
               <span className="text-slate-500 dark:text-slate-400">Your role can't change these articles.</span>
             )}
@@ -291,7 +291,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                     checked={allOnPageSelected}
                     onChange={toggleAll}
                     aria-label="Select all articles on this page"
-                    className="w-4 h-4 accent-emerald-600"
+                    className="w-4 h-4 accent-brand-600"
                   />
                 </th>
                 {COLUMNS.map((col) => {
@@ -307,7 +307,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                         type="button"
                         onClick={() => toggleSort(col.key)}
                         className={`inline-flex items-center gap-1 uppercase hover:text-slate-900 dark:hover:text-slate-100 ${
-                          active ? 'text-emerald-700 dark:text-emerald-400' : ''
+                          active ? 'text-brand-700 dark:text-brand-400' : ''
                         }`}
                       >
                         {col.label}
@@ -347,7 +347,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                   <tr
                     key={row.id}
                     className={`border-b border-slate-100 dark:border-slate-800 last:border-0 ${
-                      selected.has(row.id) ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                      selected.has(row.id) ? 'bg-brand-50/60 dark:bg-brand-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
                     }`}
                   >
                     <td className="pl-4 py-3 align-top">
@@ -356,7 +356,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                         checked={selected.has(row.id)}
                         onChange={() => toggleRow(row.id)}
                         aria-label={`Select ${row.title}`}
-                        className="w-4 h-4 mt-0.5 accent-emerald-600"
+                        className="w-4 h-4 mt-0.5 accent-brand-600"
                       />
                     </td>
                     <td className="px-3 py-3 align-top min-w-[10rem] sm:min-w-[14rem] max-w-md">
@@ -364,12 +364,12 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onEdit(row.id)}
-                          className="font-semibold text-left text-slate-900 dark:text-slate-100 hover:text-emerald-700 dark:hover:text-emerald-400 line-clamp-2"
+                          className="font-serif font-bold text-[15px] leading-snug text-left text-ink dark:text-slate-100 hover:text-brand-600 dark:hover:text-brand-400 transition-colors line-clamp-2"
                         >
                           {row.title}
                         </button>
                       ) : (
-                        <span className="font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{row.title}</span>
+                        <span className="font-serif font-bold text-[15px] leading-snug text-ink dark:text-slate-100 line-clamp-2">{row.title}</span>
                       )}
                       <div className="text-xs text-slate-400 font-mono line-clamp-1 break-all mt-0.5">/{row.slug}</div>
                       <div className="sm:hidden mt-1.5">
@@ -399,7 +399,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                         title={`SEO health ${seo.score}%`}
                         className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
                           seo.status === 'green'
-                            ? 'text-emerald-700 dark:text-emerald-400'
+                            ? 'text-brand-700 dark:text-brand-400'
                             : seo.status === 'yellow'
                               ? 'text-amber-700 dark:text-amber-400'
                               : 'text-red-600 dark:text-red-400'
@@ -407,7 +407,7 @@ export const ArticlesTable: React.FC<ArticlesTableProps> = ({
                       >
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            seo.status === 'green' ? 'bg-emerald-500' : seo.status === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
+                            seo.status === 'green' ? 'bg-brand-500' : seo.status === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
                           }`}
                         />
                         {seo.score}%

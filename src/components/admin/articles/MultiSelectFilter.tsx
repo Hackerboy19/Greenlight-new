@@ -51,13 +51,13 @@ export function MultiSelectFilter<V extends string | number>({ label, options, s
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl border text-xs font-semibold transition-colors ${
+        className={`group h-10 inline-flex items-center gap-1.5 px-3.5 rounded-full border text-xs font-semibold transition-all active:scale-95 ${
           selected.length
-            ? 'border-emerald-500/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600'
+            ? 'border-brand-600 bg-brand-600 text-white font-bold shadow-card ring-2 ring-brand-500/20'
+            : 'border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
         }`}
       >
-        <span className="text-slate-500 dark:text-slate-400 font-medium">{label}:</span>
+        <span className={`font-medium ${selected.length ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'}`}>{label}:</span>
         <span className="max-w-[9rem] truncate">{summary}</span>
         <ChevronDown className="w-3.5 h-3.5 opacity-60" />
       </button>
@@ -82,7 +82,7 @@ export function MultiSelectFilter<V extends string | number>({ label, options, s
               >
                 <span
                   className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center ${
-                    checked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-600'
+                    checked ? 'bg-brand-600 border-brand-600 text-white' : 'border-slate-300 dark:border-slate-600'
                   }`}
                 >
                   {checked && <Check className="w-3 h-3" />}

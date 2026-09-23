@@ -34,7 +34,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
     </button>
 
     <div className="flex-1 min-w-0">
-      <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 truncate">{title}</h1>
+      <h1 className="font-serif text-lg sm:text-xl font-black tracking-tight text-ink dark:text-slate-100 truncate">{title}</h1>
       {subtitle && <p className="hidden sm:block text-xs text-slate-500 dark:text-slate-400 truncate">{subtitle}</p>}
     </div>
 
@@ -45,7 +45,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         onClick={onReaderView}
         title="Open the reader site"
         aria-label="Open the reader site"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/60 transition-colors"
+        className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 hover:border-brand-500/60 transition-colors"
       >
         <Globe className="w-4 h-4" />
       </button>

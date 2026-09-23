@@ -1190,7 +1190,8 @@ export default function App() {
         )}
       </nav>
 
-      {/* Top Advert Leaderboard Banner (Official FSIA / Greenlight) */}
+      {/* Top Advert Leaderboard Banner (Official FSIA / Greenlight). Not on the admin sign-in page. */}
+      {currentView !== 'admin' && (
       <AdBanner
         variant="leaderboard"
         customTitle="Forever Star India Awards Season 6 — Grand Conclave Jaipur"
@@ -1198,6 +1199,7 @@ export default function App() {
         customCta="Nominate Online"
         targetUrl="https://greenlight.fsia.in/"
       />
+      )}
       </>
       )}
 
@@ -1628,6 +1630,16 @@ export default function App() {
                 refreshKey={articlesVersion}
                 onOpenArticles={(status) => openArticlesTable({ statuses: status ? [status] : [] })}
                 onOpenArticle={openArticleEditorById}
+                userName={adminSession.user.name}
+                onNewArticle={
+                  can('article.create')
+                    ? () => {
+                        setEditingArticle(null);
+                        setModalInitialTab('content');
+                        setIsArticleModalOpen(true);
+                      }
+                    : undefined
+                }
               />
             )}
 
@@ -2295,7 +2307,8 @@ export default function App() {
           </div>
         </div>
       </footer>
-      {/* Bottom Sticky Sponsor Bar */}
+      {/* Bottom Sticky Sponsor Bar. Not on the admin sign-in page. */}
+      {currentView !== 'admin' && (
       <AdBanner
         variant="bottom-sticky"
         customTitle="FSIA Season 6 Conclave Jaipur — National Nominations Open"
@@ -2303,6 +2316,7 @@ export default function App() {
         customCta="Apply Now"
         targetUrl="https://greenlight.fsia.in/"
       />
+      )}
       </>
       )}
     </div>

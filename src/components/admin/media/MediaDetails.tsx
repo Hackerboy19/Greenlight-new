@@ -47,7 +47,7 @@ export const MediaDetails: React.FC<MediaDetailsProps> = ({ item, onSaved, onDel
   };
 
   const field =
-    'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500';
+    'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-brand-500';
 
   return (
     <div className="space-y-4">
@@ -95,7 +95,7 @@ export const MediaDetails: React.FC<MediaDetailsProps> = ({ item, onSaved, onDel
               const latest = dirty ? await save() : item;
               if (latest) onPick(latest);
             }}
-            className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold disabled:opacity-50"
+            className="h-9 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold disabled:opacity-50"
           >
             {pickLabel || 'Use this image'}
           </button>
@@ -108,7 +108,7 @@ export const MediaDetails: React.FC<MediaDetailsProps> = ({ item, onSaved, onDel
             className={`h-9 px-4 rounded-xl text-sm font-bold disabled:opacity-50 ${
               onPick
                 ? 'border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                : 'bg-brand-600 hover:bg-brand-500 text-white'
             }`}
           >
             {saving ? 'Saving…' : 'Save details'}
@@ -123,7 +123,7 @@ export const MediaDetails: React.FC<MediaDetailsProps> = ({ item, onSaved, onDel
           }}
           className="h-9 inline-flex items-center gap-1.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-slate-300"
         >
-          {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? <Check className="w-3.5 h-3.5 text-brand-600" /> : <Copy className="w-3.5 h-3.5" />}
           {copied ? 'Copied' : 'Copy link'}
         </button>
         {onDelete && (

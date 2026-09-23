@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, Lock, Mail, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { Lock, Mail, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { GreenLightLogo } from '../GreenLightLogo';
+import { buttonClass } from './ui';
 import { AdminSession, signIn } from '../../utils/adminAuth';
 
 interface AdminLoginScreenProps {
@@ -33,15 +35,14 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSignedIn, 
 
   return (
     <div className="flex justify-center py-10 sm:py-16">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 sm:p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center shrink-0">
-            <Shield className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900 dark:text-slate-100">Sign in to the Admin CMS</h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">For Greenlight editors, authors and admins.</p>
-          </div>
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-hero border border-slate-200/80 dark:border-slate-800 shadow-card overflow-hidden">
+        <div className="p-6 sm:p-8">
+        <div className="flex justify-center mb-6">
+          <GreenLightLogo variant="horizontal" size="md" subtitle="Admin CMS" />
+        </div>
+        <div className="text-center mb-6">
+          <h1 className="font-serif text-2xl sm:text-3xl font-black tracking-tight text-ink dark:text-slate-100">Welcome back</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sign in to write, review and publish Greenlight stories.</p>
         </div>
 
         {notice && !error && (
@@ -70,7 +71,7 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSignedIn, 
                 autoFocus
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500"
                 placeholder="you@greenlight.fsia.in"
               />
             </span>
@@ -86,16 +87,12 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSignedIn, 
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500"
               />
             </span>
           </label>
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-          >
+          <button type="submit" disabled={isSubmitting} className={buttonClass('primary', 'md', 'w-full h-11')}>
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>{isSubmitting ? 'Signing in...' : 'Sign in'}</span>
           </button>
@@ -104,11 +101,18 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSignedIn, 
         <button
           type="button"
           onClick={onCancel}
-          className="mt-5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+          className="mt-5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to reader view</span>
         </button>
+        </div>
+
+        {/* Echoes the reader site's dark "Live archive" ticker. */}
+        <div className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-[11px] font-mono font-bold text-brand-400 border-t border-slate-800">
+          <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" aria-hidden="true" />
+          SECURE SIGN-IN · ROLE-BASED ACCESS
+        </div>
       </div>
     </div>
   );

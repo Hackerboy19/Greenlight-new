@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "db:migrate": "tsx backend/scripts/migrate.ts up",
     "db:migrate:status": "tsx backend/scripts/migrate.ts status",
-    "db:seed": "tsx backend/scripts/seed.ts"
+    "db:seed": "tsx backend/scripts/seed.ts",
+    "db:create-user": "tsx backend/scripts/create-user.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -7,6 +7,7 @@ import { query, transaction, memoryStore } from '../../config/database.js';
 import { sanitizeArticleHtml, stripHtmlToPlainText } from '../../utils/sanitizer.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import { generateArticleSeo } from '../../services/geminiSeoService.js';
+import { authorizeCreate, authorizeUpdate, authorizeDelete } from '../../modules/auth/articlePolicy.js';
 
 function generateSlug(text) {
   return text
@@ -99,15 +100,15 @@ export async function createArticle(req, res, next) {
       meta_keywords,
       og_image,
       category_id,
-      author_id,
-      status = 'published',
-      is_featured = false,
       infobox = []
     } = req.body;
 
     if (!title || !content) {
       throw new AppError('Title and article content are required.', 400);
     }
+
+    // Authors always write as themselves and can only save drafts or submit for review.
+    const { status, authorId: author_id, isFeatured: is_featured } = authorizeCreate(req.user, req.body);
 
     const cleanContent = sanitizeArticleHtml(content);
     const cleanExcerpt = excerpt || stripHtmlToPlainText(content, 180);
@@ -149,7 +150,7 @@ export async function createArticle(req, res, next) {
       author_id: author.id,
       author_name: author.name,
       author_avatar: author.avatar_url,
-      status: status || 'published',
+      status,
       is_featured: is_featured ? 1 : 0,
       views_count: 0,
       reading_time: readingTime,
@@ -200,11 +201,11 @@ export async function updateArticle(req, res, next) {
       meta_keywords,
       og_image,
       category_id,
-      author_id,
-      status,
-      is_featured,
       infobox
     } = req.body;
+
+    // Authors may only edit their own drafts; publishing and bylines are for editors.
+    const { status, authorId: author_id, isFeatured: is_featured } = authorizeUpdate(req.user, existing, req.body);
 
     const cleanContent = content ? sanitizeArticleHtml(content) : existing.content;
     const cleanExcerpt = excerpt !== undefined ? excerpt : (content ? stripHtmlToPlainText(cleanContent, 180) : existing.excerpt);
@@ -258,7 +259,8 @@ export async function updateArticle(req, res, next) {
       author_id: authorId,
       author_name: authorName,
       author_avatar: authorAvatar,
-      status: status || existing.status,
+      status,
+      published_at: status === 'published' && !existing.published_at ? new Date().toISOString() : existing.published_at,
       is_featured: is_featured !== undefined ? (is_featured ? 1 : 0) : existing.is_featured,
       reading_time: readingTime,
       infobox: Array.isArray(infobox) ? infobox : existing.infobox,
@@ -288,6 +290,7 @@ export async function updateArticle(req, res, next) {
  */
 export async function deleteArticle(req, res, next) {
   try {
+    authorizeDelete(req.user);
     const { id } = req.params;
     const articleIndex = memoryStore.articles.findIndex(a => a.id === parseInt(id, 10));
 
@@ -331,6 +334,11 @@ export async function quickFixSeo(req, res, next) {
 
     if (!targetArticle.title && !targetArticle.content && !targetArticle.excerpt) {
       throw new AppError('Article content or title is required to generate SEO metadata', 400);
+    }
+
+    // Saving the result is an edit, so it follows the same rules as updateArticle.
+    if (saveImmediately && articleIndex !== -1) {
+      authorizeUpdate(req.user, memoryStore.articles[articleIndex], {});
     }
 
     // Call Gemini 3.8 Flash SEO generator

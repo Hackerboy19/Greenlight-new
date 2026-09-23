@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 import { pool, databaseReady, memoryStore } from '../../config/database.js';
 import { hashPassword, needsRehash } from './password.js';
 
-// The users table stores 'writer'; the API's RBAC calls the same role 'author'.
+// Databases migrated before 006_rbac_roles_permissions still store 'writer' for authors.
 const ROLE_ALIASES = { admin: 'admin', editor: 'editor', author: 'author', writer: 'author' };
 
 export function normalizeRole(role) {
@@ -144,4 +144,30 @@ export async function recordSuccessfulLogin(user, password) {
   } catch (err) {
     console.warn(`[Auth] Could not record sign-in for user ${user.id}: ${err.message}`);
   }
+}
+
+// Short cache so role changes and deactivations apply within seconds
+// without a database round trip on every admin request.
+const LIVE_ACCOUNT_TTL_MS = 30 * 1000;
+const liveAccounts = new Map();
+
+/**
+ * Current role and active flag for a database user, or null when the user no
+ * longer exists. Throws when the database can't be reached, so callers can
+ * decide whether to fail open or closed.
+ */
+export async function getLiveAccount(id) {
+  const cached = liveAccounts.get(id);
+  if (cached && cached.expires > Date.now()) return cached.account;
+
+  const [rows] = await pool.execute('SELECT role, is_active FROM users WHERE id = ? LIMIT 1', [id]);
+  const row = rows[0];
+  const account = row ? { role: normalizeRole(row.role), isActive: Boolean(row.is_active) } : null;
+  liveAccounts.set(id, { account, expires: Date.now() + LIVE_ACCOUNT_TTL_MS });
+  return account;
+}
+
+/** Drops cached account state, e.g. after an admin changes a user's role. */
+export function forgetLiveAccount(id) {
+  liveAccounts.delete(id);
 }

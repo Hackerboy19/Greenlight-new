@@ -19,7 +19,7 @@ export interface Article {
   author_id: number;
   author_name: string;
   author_avatar?: string;
-  status: 'published' | 'draft' | 'archived';
+  status: 'published' | 'draft' | 'review' | 'scheduled' | 'archived';
   is_featured: number | boolean;
   views_count: number;
   reading_time: number;

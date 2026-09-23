@@ -23,6 +23,21 @@ async function connect() {
   });
 }
 
+/**
+ * MariaDB (what Plesk and most shared hosts run) lacks two MySQL 8 features
+ * the early migrations use: the utf8mb4_0900_ai_ci collation and the ngram
+ * full-text parser. On MariaDB those files run with utf8mb4_unicode_ci and the
+ * default parser instead. The checksum is still taken from the file as
+ * written, so the ledger stays the same on both servers.
+ */
+async function collationCompat(cx: mysql.Connection) {
+  const [rows] = await cx.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v');
+  const isMariaDb = /mariadb/i.test(String(rows[0]?.v ?? ''));
+  if (!isMariaDb) return (sql: string) => sql;
+  return (sql: string) =>
+    sql.replace(/utf8mb4_0900_ai_ci/g, 'utf8mb4_unicode_ci').replace(/\s+WITH\s+PARSER\s+ngram/gi, '');
+}
+
 async function ensureLedger(cx: mysql.Connection) {
   await cx.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -46,6 +61,7 @@ async function up() {
   try {
     await ensureLedger(cx);
     const done = await applied(cx);
+    const forServer = await collationCompat(cx);
     const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
 
     for (const file of files) {
@@ -71,7 +87,7 @@ async function up() {
       // earlier statements in place. The ledger row is written only on full
       // success, so a retry re-runs the file — keep each file idempotent-safe
       // by fixing forward, never by hand-patching the ledger.
-      await cx.query(sql);
+      await cx.query(forServer(sql));
       await cx.execute('INSERT INTO schema_migrations (name, checksum) VALUES (?, ?)', [
         file,
         checksum,

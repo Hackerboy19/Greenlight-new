@@ -48,6 +48,10 @@ export interface AdminArticleModalProps {
   categories: Category[];
   authors: Author[];
   initialTab?: 'content' | 'seo' | 'infobox' | 'php';
+  /** Editors and admins may publish, feature and change the byline; authors save drafts or submit for review. */
+  canPublish?: boolean;
+  /** Shown as the byline when the user can't choose one. */
+  ownName?: string;
 }
 
 const STOCK_IMAGE_PRESETS = [
@@ -66,7 +70,9 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   article,
   categories = [],
   authors = [],
-  initialTab = 'content'
+  initialTab = 'content',
+  canPublish = true,
+  ownName
 }) => {
   const [modalTab, setModalTab] = useState<'content' | 'seo' | 'infobox' | 'php'>(initialTab);
   const [title, setTitle] = useState('');
@@ -81,7 +87,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
   const [copiedTags, setCopiedTags] = useState(false);
   const [categoryId, setCategoryId] = useState<number>(categories[0]?.id || 1);
   const [authorId, setAuthorId] = useState<number>(authors[0]?.id || 1);
-  const [status, setStatus] = useState<'published' | 'draft' | 'archived'>('published');
+  const [status, setStatus] = useState<Article['status']>(canPublish ? 'published' : 'draft');
   const [isFeatured, setIsFeatured] = useState<boolean>(false);
   const [infobox, setInfobox] = useState<InfoboxItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,7 +132,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
       setOgImage(defaultImg);
       setCategoryId(defaultCatId);
       setAuthorId(defaultAuthId);
-      setStatus('published');
+      setStatus(canPublish ? 'published' : 'draft');
       setIsFeatured(false);
       setInfobox([
         { section: 'Overview', field_key: 'Topic Domain', field_value: 'National Talent & Media' },
@@ -135,7 +141,7 @@ export const AdminArticleModal: React.FC<AdminArticleModalProps> = ({
     }
     setModalTab('content');
     setError(null);
-  }, [article, categories, authors, isOpen]);
+  }, [article, categories, authors, isOpen, canPublish]);
 
   if (!isOpen) return null;
 
@@ -519,10 +525,14 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                   <select
                     id="article-author-select"
                     value={authorId}
+                    disabled={!canPublish}
+                    title={canPublish ? undefined : 'Articles you write are published under your own name.'}
                     onChange={(e) => setAuthorId(Number(e.target.value) || 1)}
                     className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
                   >
-                    {authors.length > 0 ? (
+                    {!canPublish && ownName ? (
+                      <option value={authorId}>{ownName} (you)</option>
+                    ) : authors.length > 0 ? (
                       authors.map((a) => (
                         <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
                       ))
@@ -542,9 +552,13 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                     onChange={(e) => setStatus(e.target.value as any)}
                     className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none"
                   >
-                    <option value="published">Published (Live Online)</option>
+                    {canPublish && <option value="published">Published (Live Online)</option>}
                     <option value="draft">Draft (Saved in Admin)</option>
-                    <option value="archived">Archived (Unlisted)</option>
+                    <option value="review">Submit for Review (Editor approves)</option>
+                    {canPublish && <option value="archived">Archived (Unlisted)</option>}
+                    {!canPublish && !['draft', 'review'].includes(status) && (
+                      <option value={status} disabled>{status[0].toUpperCase() + status.slice(1)} (set by an editor)</option>
+                    )}
                   </select>
                 </div>
 
@@ -554,6 +568,7 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
                       type="checkbox"
                       id="article-featured-checkbox"
                       checked={isFeatured}
+                      disabled={!canPublish}
                       onChange={(e) => setIsFeatured(e.target.checked)}
                       className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
                     />
@@ -1415,7 +1430,15 @@ ${metaKeywords ? `<meta name="keywords" content="${metaKeywords}">\n` : ''}<link
               className="min-h-[40px] px-4 sm:px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 active:scale-95"
             >
               <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Saving...' : 'Save & Publish'}</span>
+              <span>
+                {isSaving
+                  ? 'Saving...'
+                  : canPublish
+                    ? 'Save & Publish'
+                    : status === 'review'
+                      ? 'Submit for Review'
+                      : 'Save Draft'}
+              </span>
             </button>
           </div>
         </div>

@@ -194,3 +194,30 @@ export interface MediaItem {
   uploader_name: string | null;
   created_at: string;
 }
+
+/** One page of a magazine issue: a full-page image or a text page. */
+export interface MagazinePage {
+  position?: number;
+  kind: 'image' | 'text';
+  image_url: string | null;
+  alt_text: string;
+  heading: string;
+  body: string;
+}
+
+/** A flipbook issue. pages is present when one issue is loaded. */
+export interface MagazineIssue {
+  id: number;
+  title: string;
+  slug: string;
+  issue_label: string;
+  description: string;
+  status: 'draft' | 'published';
+  published_at: string | null;
+  updated_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+  page_count: number;
+  cover_url: string | null;
+  pages?: MagazinePage[];
+}

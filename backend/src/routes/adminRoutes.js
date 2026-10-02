@@ -14,6 +14,7 @@ import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
 import * as dashboardController from '../controllers/admin/dashboardController.js';
 import * as mediaController from '../controllers/admin/mediaController.js';
+import * as magazineController from '../controllers/admin/magazineController.js';
 import { MAX_UPLOAD_BYTES } from '../modules/media/mediaStore.js';
 
 const router = Router();
@@ -56,6 +57,18 @@ router.post(
 );
 router.patch('/media/:id', requirePermission('media.upload'), mediaController.patchMedia);
 router.delete('/media/:id', requirePermission('article.edit.any'), mediaController.removeMedia);
+
+/* ==========================================================================
+   Magazine issues (flipbook). Admins and editors build them; publishing
+   needs article.publish. Deleting a published issue is checked in the controller.
+   ========================================================================== */
+const magazineEditor = requirePermission('article.edit.any');
+router.get('/magazine/issues', magazineEditor, magazineController.getIssues);
+router.get('/magazine/issues/:id', magazineEditor, magazineController.getIssueById);
+router.post('/magazine/issues', magazineEditor, magazineController.postIssue);
+router.put('/magazine/issues/:id', magazineEditor, magazineController.putIssue);
+router.patch('/magazine/issues/:id/status', requirePermission('article.publish'), magazineController.patchIssueStatus);
+router.delete('/magazine/issues/:id', magazineEditor, magazineController.removeIssue);
 
 /* ==========================================================================
    Category Management & Homepage Reordering (Editor, Admin)

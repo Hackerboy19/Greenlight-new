@@ -8,7 +8,7 @@
 
 import { pool, databaseReady } from '../../config/database.js';
 
-export const MAX_PAGES = 40;
+export const MAX_PAGES = 60;
 export const STATUSES = ['draft', 'published'];
 
 const memoryIssues = [];
@@ -52,10 +52,13 @@ export function slugify(value) {
     .slice(0, 120);
 }
 
-/** Pages may show images from the media library (/uploads/...) or any https address. */
+/**
+ * Pages may show images from this site (the media library's /uploads/... or
+ * an article's /assets/img/blog/...) or any https address.
+ */
 function safeImageUrl(value) {
   const url = text(value, 700);
-  if (/^\/uploads\/[A-Za-z0-9/_.-]+$/.test(url)) return url;
+  if (/^\/[A-Za-z0-9_-][A-Za-z0-9/_.-]*$/.test(url) && !url.includes('..')) return url;
   if (/^https:\/\/[^\s"'<>]+$/i.test(url)) return url;
   return null;
 }
@@ -69,7 +72,16 @@ export function normalizePages(pages) {
     if (kind === 'image') {
       const imageUrl = safeImageUrl(page && page.image_url);
       if (!imageUrl) throw new MagazineInputError(`Page ${index + 1} needs an image from the media library.`);
-      return { position: index + 1, kind, image_url: imageUrl, alt_text: text(page.alt_text, 300), heading: '', body: '' };
+      // An optional caption (title and a line of text) is laid over the image,
+      // e.g. an article's headline on its opening photo.
+      return {
+        position: index + 1,
+        kind,
+        image_url: imageUrl,
+        alt_text: text(page.alt_text, 300),
+        heading: text(page.heading, 200),
+        body: text(page.body, 400)
+      };
     }
     const heading = text(page.heading, 200);
     const body = String(page.body ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 6000);

@@ -7,6 +7,7 @@ import {
   ImagePlus,
   Images,
   Loader2,
+  Newspaper,
   Save,
   Send,
   Trash2,
@@ -14,7 +15,8 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import type { MagazineIssue, MagazinePage, MediaItem } from '../../../types';
+import type { Article, MagazineIssue, MagazinePage, MediaItem } from '../../../types';
+import { authFetch } from '../../../utils/adminAuth';
 import { Card, SectionHeading, buttonClass } from '../ui';
 import { MediaPickerModal } from '../media/MediaPickerModal';
 import { ACCEPTED_TYPES, rejectReason, uploadMediaFile } from '../media/mediaApi';
@@ -22,8 +24,11 @@ import { FlipbookViewer } from '../../magazine/FlipbookViewer';
 import { PageTile } from './PageTile';
 import { IssueDraft, createIssue, deleteIssue, saveIssue, setIssueStatus, slugify } from './magazineApi';
 import { IssueStatusBadge } from './IssueStatusBadge';
+import { ArticlePickerModal } from './ArticlePickerModal';
+import { articleToPages } from './articleToPages';
+import { createPageMeasurer } from './pageMeasurer';
 
-const MAX_PAGES = 40;
+const MAX_PAGES = 60;
 
 const field =
   'w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-brand-500';
@@ -79,6 +84,7 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
   const [fileDropActive, setFileDropActive] = useState(false);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [articlePickerOpen, setArticlePickerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [busy, setBusy] = useState<null | 'save' | 'publish' | 'delete'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +160,34 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
   const pickFromLibrary = (item: MediaItem) => {
     setPickerOpen(false);
     addPages([{ kind: 'image', image_url: item.url, alt_text: item.alt_text, heading: '', body: '' }]);
+  };
+
+  /** Loads each article's full text and appends its pages, in the order picked. */
+  const addArticles = async (picked: Article[]) => {
+    const added: MagazinePage[] = [];
+    const measurer = createPageMeasurer(draft.title || (picked.length === 1 ? picked[0].title : ''));
+    try {
+      for (const summary of picked) {
+        try {
+          const res = await authFetch(`/api/admin/articles/${summary.id}`);
+          const body = await res.json().catch(() => null);
+          if (!res.ok || !body?.data) throw new Error(body?.message || `could not load (${res.status})`);
+          added.push(...articleToPages(body.data, measurer.fits));
+        } catch (err) {
+          setError(`${summary.title}: ${err instanceof Error ? err.message : 'could not load'}`);
+        }
+      }
+    } finally {
+      measurer.dispose();
+    }
+    setArticlePickerOpen(false);
+    if (!added.length) return;
+    // A one-article issue takes the article's headline as its title.
+    if (!draft.title && picked.length === 1) {
+      update({ title: picked[0].title.slice(0, 200), ...(slugTouched ? {} : { slug: slugify(picked[0].title) }) });
+    }
+    addPages(added);
+    onNotice(`Added ${added.length} page${added.length === 1 ? '' : 's'} from ${picked.length} article${picked.length === 1 ? '' : 's'}.`);
   };
 
   const addTextPage = () => addPages([{ kind: 'text', image_url: null, alt_text: '', heading: '', body: '' }]);
@@ -323,6 +357,10 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
               <Images className="w-4 h-4" />
               From media library
             </button>
+            <button type="button" onClick={() => setArticlePickerOpen(true)} className={buttonClass('secondary', 'sm')}>
+              <Newspaper className="w-4 h-4" />
+              From blog articles
+            </button>
             <button type="button" onClick={addTextPage} className={buttonClass('secondary', 'sm')}>
               <Type className="w-4 h-4" />
               Text page
@@ -353,7 +391,7 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
                 <ImagePlus className="w-8 h-8 text-brand-600" />
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Add the pages of this issue</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
-                  Drop page images here (they are added in file-name order, so name them page-01, page-02 …), pick them from the media library, or add text pages.
+                  Drop page images here (they are added in file-name order, so name them page-01, page-02 …), pick them from the media library, turn blog articles into pages, or add text pages.
                 </p>
               </div>
             ) : (
@@ -470,6 +508,26 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
                       className={field}
                     />
                   </label>
+                  <label className="block">
+                    <span className={labelClass}>Caption title (optional)</span>
+                    <input
+                      value={selectedPage.heading}
+                      maxLength={200}
+                      placeholder="Printed over the bottom of the image"
+                      onChange={(e) => updatePage(selected, { heading: e.target.value })}
+                      className={field}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={labelClass}>Caption text (optional)</span>
+                    <textarea
+                      value={selectedPage.body}
+                      maxLength={400}
+                      rows={2}
+                      onChange={(e) => updatePage(selected, { body: e.target.value })}
+                      className={`${field} resize-y`}
+                    />
+                  </label>
                 </>
               ) : (
                 <>
@@ -507,6 +565,8 @@ export const IssueEditor: React.FC<IssueEditorProps> = ({
           )}
         </div>
       </div>
+
+      <ArticlePickerModal open={articlePickerOpen} onAdd={addArticles} onClose={() => setArticlePickerOpen(false)} />
 
       <MediaPickerModal
         open={pickerOpen}

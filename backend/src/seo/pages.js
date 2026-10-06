@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { memoryStore } from '../config/database.js';
+import { getPublishedIssue } from '../modules/magazine/magazineStore.js';
 
 const SITE_NAME = 'Greenlight';
 const DEFAULT_TITLE = 'Greenlight - International Blog & Magazine Hub | FSIA';
@@ -169,6 +170,29 @@ export function mountReaderPages(app, distPath) {
       description: category.description || DEFAULT_DESCRIPTION,
       canonical: `${siteUrl()}/category/${category.slug}`
     });
+  });
+
+  app.get('/magazine', (req, res) =>
+    send(res, 200, {
+      title: `Magazine | ${SITE_NAME}`,
+      description: 'Read Greenlight magazine issues page by page, like the printed edition.',
+      canonical: `${siteUrl()}/magazine`
+    })
+  );
+
+  app.get('/magazine/:slug', async (req, res, next) => {
+    try {
+      const issue = await getPublishedIssue(req.params.slug);
+      if (!issue) return notFound(req, res);
+      return send(res, 200, {
+        title: `${issue.title}${issue.issue_label ? ` (${issue.issue_label})` : ''} | ${SITE_NAME} Magazine`,
+        description: issue.description || `Read ${issue.title} page by page.`,
+        canonical: `${siteUrl()}/magazine/${issue.slug}`,
+        image: issue.cover_url
+      });
+    } catch (err) {
+      return next(err);
+    }
   });
 
   // The old site linked articles as greenlight.fsia.in/<slug>. A permanent

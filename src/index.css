@@ -256,3 +256,36 @@ body {
   margin: 1.5rem 0;
   border-color: #e2e8f0;
 }
+
+/* Flipbook pages (src/components/magazine). page-flip sizes and positions
+   each page; this only keeps the content inside it. */
+.magazine-page {
+  overflow: hidden;
+  background-color: #fbfaf7;
+  /* Page text is sized in cqw (a share of the page width), so a page holds
+     the same words on a phone as on a desktop. */
+  container-type: inline-size;
+}
+.magazine-page > * {
+  height: 100%;
+}
+/* A soft fold shadow along the spine of an open spread. */
+.magazine-page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7%;
+  pointer-events: none;
+}
+.magazine-page.--left::after {
+  right: 0;
+  background: linear-gradient(to left, rgb(0 0 0 / 0.22), transparent);
+}
+.magazine-page.--right::after {
+  left: 0;
+  background: linear-gradient(to right, rgb(0 0 0 / 0.22), transparent);
+}
+.magazine-page[data-density='hard']::after {
+  display: none;
+}

@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { apiLimiter } from '../config/security.js';
 import * as articleController from '../controllers/public/articleController.js';
 import * as searchController from '../controllers/public/searchController.js';
+import * as magazineController from '../controllers/admin/magazineController.js';
 import { memoryStore } from '../config/database.js';
 
 const router = Router();
@@ -30,6 +31,10 @@ router.get('/categories', (req, res) => {
     .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
   return res.status(200).json({ success: true, data: active });
 });
+
+/* Published magazine issues (flipbook) and one issue with its pages */
+router.get('/magazine', magazineController.getPublishedIssues);
+router.get('/magazine/:slug', magazineController.getPublishedIssueBySlug);
 
 /* Full-text & Voice Search Endpoint */
 router.get('/search', searchController.searchArticles);

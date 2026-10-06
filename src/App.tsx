@@ -60,6 +60,7 @@ import { AudioReader } from './components/public/AudioReader';
 import { TranslationSelector } from './components/public/TranslationSelector';
 import { AdBanner } from './components/public/AdBanner';
 import { ArticleReadingProgress } from './components/public/ArticleReadingProgress';
+import { MagazineView } from './components/public/MagazineView';
 import { translateArticle } from './utils/translationService';
 import { AnalyticsCharts } from './components/admin/AnalyticsCharts';
 import { RankDropsTable } from './components/admin/RankDropsTable';
@@ -81,6 +82,7 @@ import type { AdminNavItem } from './components/admin/layout/AdminSidebar';
 import { DashboardHome } from './components/admin/dashboard/DashboardHome';
 import { ArticlesTable } from './components/admin/articles/ArticlesTable';
 import { MediaLibrary } from './components/admin/media/MediaLibrary';
+import { MagazineBuilder } from './components/admin/magazine/MagazineBuilder';
 import { useTheme } from './utils/theme';
 import {
   AdminSession,
@@ -113,10 +115,17 @@ function isAdminPath(pathname: string) {
  * /category/<slug>. The server answers these with the right title and meta
  * tags (backend/src/seo/pages.js), so links shared or indexed keep working.
  */
-type ReaderRoute = { kind: 'admin' } | { kind: 'article'; slug: string } | { kind: 'category'; slug: string } | { kind: 'home' };
+type ReaderRoute =
+  | { kind: 'admin' }
+  | { kind: 'article'; slug: string }
+  | { kind: 'category'; slug: string }
+  | { kind: 'magazine'; slug: string | null }
+  | { kind: 'home' };
 
 function parseReaderPath(pathname: string): ReaderRoute {
   if (isAdminPath(pathname)) return { kind: 'admin' };
+  const magazine = pathname.match(/^\/magazine(?:\/([A-Za-z0-9_-]+))?\/?$/);
+  if (magazine) return { kind: 'magazine', slug: magazine[1] || null };
   const match = pathname.match(/^\/(article|category)\/([A-Za-z0-9_-]+)\/?$/);
   if (match) return { kind: match[1] as 'article' | 'category', slug: match[2] };
   return { kind: 'home' };
@@ -124,13 +133,14 @@ function parseReaderPath(pathname: string): ReaderRoute {
 
 const initialRoute = parseReaderPath(window.location.pathname);
 
-type AdminTab = 'dashboard' | 'articles' | 'media' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
+type AdminTab = 'dashboard' | 'articles' | 'media' | 'magazine' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
 
 // Header title and one-line description for each Admin CMS screen.
 const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> = {
   dashboard: { title: 'Dashboard', subtitle: 'Publishing, traffic and what the team changed recently' },
   articles: { title: 'Articles', subtitle: 'Write, edit and publish stories and their infoboxes' },
   media: { title: 'Media library', subtitle: 'Upload images and describe them for readers and Google' },
+  magazine: { title: 'Magazine', subtitle: 'Group pages into issues and publish them as a flipbook' },
   gsc: { title: 'SEO & Search Console', subtitle: 'Clicks, impressions and ranking changes from Google' },
   social: { title: 'Social shares', subtitle: 'Shares and click-through by platform' },
   categories: { title: 'Categories', subtitle: 'Homepage sections and their order' },
@@ -141,9 +151,11 @@ const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> =
 export default function App() {
   // App navigation state
   // The Admin CMS lives at /admin; readers never see a link to it.
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(() =>
-    initialRoute.kind === 'admin' ? 'admin' : initialRoute.kind === 'article' ? 'article' : 'public'
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list' | 'magazine'>(() =>
+    initialRoute.kind === 'admin' ? 'admin' : initialRoute.kind === 'article' ? 'article' : initialRoute.kind === 'magazine' ? 'magazine' : 'public'
   );
+  // The magazine issue open in the flipbook at /magazine/<slug>; null shows all issues.
+  const [magazineSlug, setMagazineSlug] = useState<string | null>(initialRoute.kind === 'magazine' ? initialRoute.slug : null);
   // Signed-in CMS user. The admin dashboard renders only while this is set.
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => loadSession());
   const [adminLoginNotice, setAdminLoginNotice] = useState<string | null>(null);
@@ -206,6 +218,7 @@ export default function App() {
   const TAB_PERMISSION: Partial<Record<typeof adminTab, string>> = {
     gsc: 'analytics.view',
     social: 'analytics.view',
+    magazine: 'article.edit.any',
     categories: 'category.manage',
     authors: 'author.manage',
     php: 'settings.manage'
@@ -405,9 +418,10 @@ export default function App() {
     let path = window.location.pathname;
     if (currentView === 'admin') path = ADMIN_PATH;
     else if (currentView === 'article' && selectedArticleSlug) path = `/article/${selectedArticleSlug}`;
+    else if (currentView === 'magazine') path = magazineSlug ? `/magazine/${magazineSlug}` : '/magazine';
     else if (currentView === 'public') path = activeCategorySlug !== 'all' && !searchQuery ? `/category/${activeCategorySlug}` : '/';
     if (path !== window.location.pathname) window.history.pushState(null, '', path);
-  }, [currentView, selectedArticleSlug, activeCategorySlug, searchQuery]);
+  }, [currentView, selectedArticleSlug, activeCategorySlug, searchQuery, magazineSlug]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -416,6 +430,9 @@ export default function App() {
         setCurrentView('admin');
       } else if (route.kind === 'article') {
         handleSelectArticleRef.current(route.slug);
+      } else if (route.kind === 'magazine') {
+        setMagazineSlug(route.slug);
+        setCurrentView('magazine');
       } else {
         setSelectedArticleSlug(null);
         setActiveCategorySlug(route.kind === 'category' ? route.slug : 'all');
@@ -882,6 +899,7 @@ export default function App() {
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'articles', label: 'Articles', icon: FileText, group: 'Content' },
       { id: 'media', label: 'Media library', icon: ImageIcon, group: 'Content' },
+      { id: 'magazine', label: 'Magazine', icon: BookOpen, group: 'Content' },
       { id: 'categories', label: 'Categories', icon: Layers, count: categories.length, group: 'Content' },
       { id: 'authors', label: 'Editorial staff', icon: Users, count: authors.length, group: 'Content' },
       { id: 'gsc', label: 'SEO & Search Console', icon: Activity, group: 'Insights' },
@@ -1180,6 +1198,24 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    setMagazineSlug(null);
+                    setSearchQuery('');
+                    setCurrentView('magazine');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-1.5 ${
+                    currentView === 'magazine'
+                      ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Magazine</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
                     setCurrentView('reading-list');
                     setSearchQuery('');
                   }}
@@ -1207,10 +1243,10 @@ export default function App() {
                     onClick={() => {
                       setActiveCategorySlug(cat.slug);
                       setSearchQuery('');
-                      if (currentView === 'article') setCurrentView('public');
+                      if (currentView === 'article' || currentView === 'magazine') setCurrentView('public');
                     }}
                     className={`min-h-[40px] px-3.5 sm:px-4 py-2 rounded-full transition-all whitespace-nowrap active:scale-95 shrink-0 ${
-                      activeCategorySlug === cat.slug && !searchQuery
+                      activeCategorySlug === cat.slug && !searchQuery && currentView !== 'magazine'
                         ? 'bg-emerald-600 text-white shadow-xs font-bold ring-2 ring-emerald-500/20'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 bg-white/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800'
                     }`}
@@ -1619,6 +1655,17 @@ export default function App() {
         })()}
 
         {/* VIEW: MY READING LIST */}
+        {currentView === 'magazine' && (
+          <MagazineView
+            slug={magazineSlug}
+            onOpenIssue={(slug) => {
+              setMagazineSlug(slug);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onBackToShelf={() => setMagazineSlug(null)}
+          />
+        )}
+
         {currentView === 'reading-list' && (
           <ReadingListView
             bookmarkedIds={bookmarkedIds}
@@ -1717,6 +1764,16 @@ export default function App() {
               <MediaLibrary
                 canUpload={can('media.upload')}
                 canDelete={can('article.edit.any')}
+                onNotice={showAdminNotice}
+              />
+            )}
+
+            {/* MAGAZINE ISSUES (flipbook builder) */}
+            {adminTab === 'magazine' && (
+              <MagazineBuilder
+                canPublish={can('article.publish')}
+                canUpload={can('media.upload')}
+                canDeletePublished={can('article.delete')}
                 onNotice={showAdminNotice}
               />
             )}

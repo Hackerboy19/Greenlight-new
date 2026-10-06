@@ -41,8 +41,8 @@ CREATE TABLE \`users\` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO \`users\` (\`id\`, \`username\`, \`email\`, \`password_hash\`, \`full_name\`, \`mobile_no\`, \`role\`, \`avatar_url\`, \`bio\`, \`is_active\`, \`last_login\`, \`created_at\`, \`updated_at\`) VALUES
-(1, 'admin', 'admin@gmail.com', '$2y$10$qlAzDhBEqkKwP3OykqA7N.ZQk6T67fxD9RHfdv3zToxa9Mtwu9C/e', 'Admin User', '544354353', 'superadmin', 'https://greenlight.fsia.in/assets/img/dc48701e5a6a300744b873b63f772101.png', 'Executive Chief Administrator and Publisher for Greenlight Media & FSIA.', 1, '2026-04-20 10:00:00', '2018-03-19 00:00:00', '2026-09-22 00:00:00'),
-(2, 'bhau885484', 'm.bhau90@gmail.com', '$2y$10$5wXvKkhMTEatZ7aUHE/RU.lQbeXdURME8Br9Noxn802epBPoFz7wu', 'Mahendra Kumar', '8854842806', 'admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80', 'Technical Director & Editorial Operations Lead.', 1, '2026-04-18 14:30:00', '2023-06-22 00:00:00', '2026-09-22 00:00:00');
+(1, 'admin', 'admin@greenlight.fsia.in', 'SET-A-NEW-PASSWORD-HASH', 'Admin User', '', 'superadmin', 'https://greenlight.fsia.in/assets/img/dc48701e5a6a300744b873b63f772101.png', 'Executive Chief Administrator and Publisher for Greenlight Media & FSIA.', 1, '2026-04-20 10:00:00', '2018-03-19 00:00:00', '2026-09-22 00:00:00'),
+(2, 'editor', 'editor@greenlight.fsia.in', 'SET-A-NEW-PASSWORD-HASH', 'Editorial Lead', '', 'admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80', 'Technical Director & Editorial Operations Lead.', 1, '2026-04-18 14:30:00', '2023-06-22 00:00:00', '2026-09-22 00:00:00');
 
 -- ------------------------------------------------------------------------------
 -- 2. TABLE: categories (Migrated from ci_category)

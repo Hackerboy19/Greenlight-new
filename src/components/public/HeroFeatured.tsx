@@ -22,7 +22,7 @@ export interface ArticleItem {
   views_count?: number;
   meta_title?: string;
   meta_description?: string;
-  infobox?: Array<{ section: string; field_key: string; field_value: string }>;
+  infobox?: Array<{ section?: string; field_key: string; field_value: string }>;
 }
 
 export interface HeroFeaturedProps {

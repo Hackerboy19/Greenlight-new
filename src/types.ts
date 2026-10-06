@@ -19,7 +19,7 @@ export interface Article {
   author_id: number;
   author_name: string;
   author_avatar?: string;
-  status: 'published' | 'draft' | 'archived';
+  status: 'published' | 'draft' | 'review' | 'scheduled' | 'archived';
   is_featured: number | boolean;
   views_count: number;
   reading_time: number;
@@ -28,6 +28,39 @@ export interface Article {
   updated_at?: string;
   infobox?: InfoboxItem[];
   related?: Article[];
+  /** Admin API only: what the signed-in user may do with this article. */
+  actions?: ArticleActions;
+}
+
+export interface ArticleActions {
+  edit: boolean;
+  submit: boolean;
+  publish: boolean;
+  returnToDraft: boolean;
+  unpublish: boolean;
+  delete: boolean;
+}
+
+export type ArticleSortKey =
+  | 'title'
+  | 'status'
+  | 'category'
+  | 'author'
+  | 'views'
+  | 'reading_time'
+  | 'created_at'
+  | 'updated_at'
+  | 'published_at';
+
+/** meta of GET /api/admin/articles */
+export interface ArticleListMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  sort: ArticleSortKey;
+  order: 'asc' | 'desc';
+  statusCounts: Record<Article['status'], number>;
 }
 
 export interface InfoboxItem {
@@ -109,3 +142,55 @@ export interface ContentAuditResult {
   source?: string;
 }
 
+
+/** One day of site traffic on the admin dashboard. */
+export interface TrafficPoint {
+  date: string;
+  views: number;
+  visitors: number;
+}
+
+export type ActivityAction = 'created' | 'edited' | 'submitted' | 'returned' | 'published' | 'unpublished' | 'deleted';
+
+/** One entry in the admin dashboard's Recent Activity feed. */
+export interface ActivityEntry {
+  id: number;
+  actor_user_id: number | null;
+  actor_name: string;
+  actor_role: string;
+  action: ActivityAction;
+  article_id: number | null;
+  article_title: string;
+  created_at: string;
+}
+
+/** GET /api/admin/dashboard */
+export interface DashboardSummary {
+  metrics: {
+    published: number;
+    pendingReview: number;
+    drafts: number;
+    scheduled: number;
+    totalViews: number;
+  };
+  traffic: { source: 'mock' | 'live'; days: TrafficPoint[] };
+  activity: ActivityEntry[];
+}
+
+/** One image in the media library (GET /api/admin/media). */
+export interface MediaItem {
+  id: number;
+  /** Site-relative, e.g. /uploads/2026/09/ab12cd-photo.jpg */
+  url: string;
+  file_name: string;
+  mime_type: string;
+  file_size: number;
+  width: number | null;
+  height: number | null;
+  alt_text: string;
+  caption: string;
+  credit: string;
+  uploaded_by: number | null;
+  uploader_name: string | null;
+  created_at: string;
+}

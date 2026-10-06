@@ -3,7 +3,7 @@
  * Target: https://greenlight.fsia.in/
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Globe, 
   Search, 
@@ -47,7 +47,8 @@ import {
   Download,
   BookOpen,
   ArrowUpDown,
-  LogOut
+  LogOut,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { VoiceSearchBar } from './components/public/VoiceSearchBar';
@@ -75,11 +76,18 @@ import { calculateSeoHealth } from './utils/seoHealth';
 import { Article, Category, Author, GscPerformancePoint, GscRankDrop } from './types';
 import { INITIAL_ARTICLES, INITIAL_CATEGORIES, INITIAL_AUTHORS } from './data/initialData';
 import { AdminLoginScreen } from './components/admin/AdminLoginScreen';
+import { AdminShell } from './components/admin/layout/AdminShell';
+import type { AdminNavItem } from './components/admin/layout/AdminSidebar';
+import { DashboardHome } from './components/admin/dashboard/DashboardHome';
+import { ArticlesTable } from './components/admin/articles/ArticlesTable';
+import { MediaLibrary } from './components/admin/media/MediaLibrary';
+import { useTheme } from './utils/theme';
 import {
   AdminSession,
   SESSION_EXPIRED_EVENT,
   authFetch,
   clearSession,
+  hasPermission,
   loadSession,
   verifySession
 } from './utils/adminAuth';
@@ -100,18 +108,52 @@ function isAdminPath(pathname: string) {
   return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
 }
 
+/**
+ * Reader URLs, the same as the PHP site used: /article/<slug> and
+ * /category/<slug>. The server answers these with the right title and meta
+ * tags (backend/src/seo/pages.js), so links shared or indexed keep working.
+ */
+type ReaderRoute = { kind: 'admin' } | { kind: 'article'; slug: string } | { kind: 'category'; slug: string } | { kind: 'home' };
+
+function parseReaderPath(pathname: string): ReaderRoute {
+  if (isAdminPath(pathname)) return { kind: 'admin' };
+  const match = pathname.match(/^\/(article|category)\/([A-Za-z0-9_-]+)\/?$/);
+  if (match) return { kind: match[1] as 'article' | 'category', slug: match[2] };
+  return { kind: 'home' };
+}
+
+const initialRoute = parseReaderPath(window.location.pathname);
+
+type AdminTab = 'dashboard' | 'articles' | 'media' | 'gsc' | 'social' | 'categories' | 'authors' | 'php';
+
+// Header title and one-line description for each Admin CMS screen.
+const ADMIN_PAGE_TITLES: Record<AdminTab, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Dashboard', subtitle: 'Publishing, traffic and what the team changed recently' },
+  articles: { title: 'Articles', subtitle: 'Write, edit and publish stories and their infoboxes' },
+  media: { title: 'Media library', subtitle: 'Upload images and describe them for readers and Google' },
+  gsc: { title: 'SEO & Search Console', subtitle: 'Clicks, impressions and ranking changes from Google' },
+  social: { title: 'Social shares', subtitle: 'Shares and click-through by platform' },
+  categories: { title: 'Categories', subtitle: 'Homepage sections and their order' },
+  authors: { title: 'Editorial staff', subtitle: 'Bylines and roles' },
+  php: { title: 'PHP code generator', subtitle: 'Export the catalog as PHP for the live site' }
+};
+
 export default function App() {
   // App navigation state
   // The Admin CMS lives at /admin; readers never see a link to it.
-  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(
-    () => (isAdminPath(window.location.pathname) ? 'admin' : 'public')
+  const [currentView, setCurrentView] = useState<'public' | 'article' | 'admin' | 'reading-list'>(() =>
+    initialRoute.kind === 'admin' ? 'admin' : initialRoute.kind === 'article' ? 'article' : 'public'
   );
   // Signed-in CMS user. The admin dashboard renders only while this is set.
   const [adminSession, setAdminSession] = useState<AdminSession | null>(() => loadSession());
   const [adminLoginNotice, setAdminLoginNotice] = useState<string | null>(null);
-  const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(null);
+  const [selectedArticleSlug, setSelectedArticleSlug] = useState<string | null>(
+    initialRoute.kind === 'article' ? initialRoute.slug : null
+  );
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
-  const [activeCategorySlug, setActiveCategorySlug] = useState<string>('all');
+  const [activeCategorySlug, setActiveCategorySlug] = useState<string>(
+    initialRoute.kind === 'category' ? initialRoute.slug : 'all'
+  );
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -157,18 +199,36 @@ export default function App() {
   };
 
   // Admin CMS Sub-tabs & Filter states
-  const [adminTab, setAdminTab] = useState<'gsc' | 'articles' | 'categories' | 'authors' | 'php' | 'social'>('articles');
+  const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
+  const theme = useTheme();
+  // Controls follow the signed-in role; the server enforces the same rules.
+  const can = (permission: string) => hasPermission(adminSession?.user, permission);
+  const TAB_PERMISSION: Partial<Record<typeof adminTab, string>> = {
+    gsc: 'analytics.view',
+    social: 'analytics.view',
+    categories: 'category.manage',
+    authors: 'author.manage',
+    php: 'settings.manage'
+  };
+  const canOpenTab = (tab: typeof adminTab) => !TAB_PERMISSION[tab] || can(TAB_PERMISSION[tab]!);
+  useEffect(() => {
+    if (!canOpenTab(adminTab)) setAdminTab('dashboard');
+  });
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareArticleTarget, setShareArticleTarget] = useState<Article | null>(null);
   const [isArticleModalOpen, setIsArticleModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [modalInitialTab, setModalInitialTab] = useState<'content' | 'seo' | 'infobox' | 'php'>('content');
-  const [adminArticleSearch, setAdminArticleSearch] = useState('');
-  const [adminArticleCategoryFilter, setAdminArticleCategoryFilter] = useState('all');
-  const [adminArticleStatusFilter, setAdminArticleStatusFilter] = useState('all');
-  const [adminArticleSeoFilter, setAdminArticleSeoFilter] = useState<'all' | 'green' | 'yellow' | 'red'>('all');
-  const [adminArticleSort, setAdminArticleSort] = useState<'latest' | 'oldest' | 'title' | 'reading_time' | 'infobox' | 'seo_asc' | 'seo_desc'>('latest');
-  const [adminArticleViewMode, setAdminArticleViewMode] = useState<'table' | 'cards'>('cards');
+  // Bumped whenever articles change, so the table and dashboard reload.
+  const [articlesVersion, setArticlesVersion] = useState(0);
+  // Dashboard cards and staff cards open the table pre-filtered; a new key resets the table to it.
+  const [articlesTableFilter, setArticlesTableFilter] = useState<{ statuses?: Article['status'][]; authorIds?: number[] }>({});
+  const [articlesTableKey, setArticlesTableKey] = useState(0);
+  const openArticlesTable = (filter: { statuses?: Article['status'][]; authorIds?: number[] } = {}) => {
+    setArticlesTableFilter(filter);
+    setArticlesTableKey((k) => k + 1);
+    setAdminTab('articles');
+  };
   const [adminCategorySearch, setAdminCategorySearch] = useState('');
   const [adminAuthorSearch, setAdminAuthorSearch] = useState('');
   const [adminAuthorRoleFilter, setAdminAuthorRoleFilter] = useState('all');
@@ -285,23 +345,27 @@ export default function App() {
       }
 
       // Admin datasets need a signed-in session; skip them for readers.
-      if (!loadSession()) return;
+      const session = loadSession();
+      if (!session) return;
 
-      // Fetch GSC Analytics
-      const gscRes = await authFetch('/api/admin/gsc/performance');
-      if (gscRes.ok) {
-        const gscJson = await parseResponseJson(gscRes);
-        if (gscJson?.timeSeries) {
-          setGscData(gscJson.timeSeries);
+      // Search Console data is only for roles that can view analytics.
+      if (hasPermission(session.user, 'analytics.view')) {
+        // Fetch GSC Analytics
+        const gscRes = await authFetch('/api/admin/gsc/performance');
+        if (gscRes.ok) {
+          const gscJson = await parseResponseJson(gscRes);
+          if (gscJson?.timeSeries) {
+            setGscData(gscJson.timeSeries);
+          }
         }
-      }
 
-      // Fetch GSC Rank Drops
-      const dropsRes = await authFetch('/api/admin/gsc/rank-drops');
-      if (dropsRes.ok) {
-        const dropsJson = await parseResponseJson(dropsRes);
-        if (dropsJson?.data) {
-          setGscRankDrops(dropsJson.data);
+        // Fetch GSC Rank Drops
+        const dropsRes = await authFetch('/api/admin/gsc/rank-drops');
+        if (dropsRes.ok) {
+          const dropsJson = await parseResponseJson(dropsRes);
+          if (dropsJson?.data) {
+            setGscRankDrops(dropsJson.data);
+          }
         }
       }
 
@@ -329,25 +393,34 @@ export default function App() {
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
     verifySession().then((user) => {
-      if (!user) setAdminSession(null);
+      // Pick up role or permission changes made since the last sign-in.
+      setAdminSession((current) => (user && current ? { ...current, user } : null));
     });
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
 
-  // Keep the address bar in step with the admin view, so /admin can be
-  // bookmarked and the browser Back button leaves the CMS.
+  // Keep the address bar in step with what is on screen, so articles,
+  // categories and /admin can be bookmarked and shared, and Back works.
   useEffect(() => {
-    const onAdminPath = isAdminPath(window.location.pathname);
-    if (currentView === 'admin' && !onAdminPath) {
-      window.history.pushState(null, '', ADMIN_PATH);
-    } else if (currentView !== 'admin' && onAdminPath) {
-      window.history.pushState(null, '', '/');
-    }
-  }, [currentView]);
+    let path = window.location.pathname;
+    if (currentView === 'admin') path = ADMIN_PATH;
+    else if (currentView === 'article' && selectedArticleSlug) path = `/article/${selectedArticleSlug}`;
+    else if (currentView === 'public') path = activeCategorySlug !== 'all' && !searchQuery ? `/category/${activeCategorySlug}` : '/';
+    if (path !== window.location.pathname) window.history.pushState(null, '', path);
+  }, [currentView, selectedArticleSlug, activeCategorySlug, searchQuery]);
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentView(isAdminPath(window.location.pathname) ? 'admin' : 'public');
+      const route = parseReaderPath(window.location.pathname);
+      if (route.kind === 'admin') {
+        setCurrentView('admin');
+      } else if (route.kind === 'article') {
+        handleSelectArticleRef.current(route.slug);
+      } else {
+        setSelectedArticleSlug(null);
+        setActiveCategorySlug(route.kind === 'category' ? route.slug : 'all');
+        setCurrentView('public');
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -430,8 +503,31 @@ export default function App() {
       } else {
         setTranslatedArticle(null);
       }
+    } else {
+      // Unknown or unpublished slug: fall back to the homepage.
+      setSelectedArticleSlug(null);
+      setCurrentView('public');
     }
   };
+
+  // Lets the popstate listener, registered once, call the current version.
+  const handleSelectArticleRef = useRef(handleSelectArticle);
+  handleSelectArticleRef.current = handleSelectArticle;
+
+  // Opened at /article/<slug>: load that article.
+  useEffect(() => {
+    if (initialRoute.kind === 'article') handleSelectArticle(initialRoute.slug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Browser tab title follows the article being read.
+  useEffect(() => {
+    if (currentView === 'article' && selectedArticle) {
+      document.title = selectedArticle.meta_title || `${selectedArticle.title} | Greenlight`;
+    } else if (currentView !== 'admin') {
+      document.title = 'Greenlight - International Blog & Magazine Hub | FSIA';
+    }
+  }, [currentView, selectedArticle]);
 
   // Handle search submission
   const handleSearch = async (query: string) => {
@@ -463,6 +559,7 @@ export default function App() {
       throw new Error(err.message || err.error || 'Failed to save article');
     }
 
+    setArticlesVersion((v) => v + 1);
     await loadData();
   };
 
@@ -763,42 +860,6 @@ export default function App() {
     setTimeout(() => setAdminExportToast(null), 3000);
   };
 
-  const filteredAdminArticles = articles
-    .filter(art => {
-      const q = adminArticleSearch.toLowerCase().trim();
-      const matchesSearch = !q || 
-        art.title.toLowerCase().includes(q) ||
-        art.slug.toLowerCase().includes(q) ||
-        (art.author_name || '').toLowerCase().includes(q) ||
-        (art.category_name || '').toLowerCase().includes(q);
-      const matchesCategory = adminArticleCategoryFilter === 'all' || art.category_slug === adminArticleCategoryFilter || String(art.category_id) === adminArticleCategoryFilter;
-      const matchesStatus = adminArticleStatusFilter === 'all' || art.status === adminArticleStatusFilter;
-      const matchesSeo = adminArticleSeoFilter === 'all' || calculateSeoHealth(art).status === adminArticleSeoFilter;
-      return matchesSearch && matchesCategory && matchesStatus && matchesSeo;
-    })
-    .sort((a, b) => {
-      if (adminArticleSort === 'seo_asc') {
-        return calculateSeoHealth(a).score - calculateSeoHealth(b).score;
-      }
-      if (adminArticleSort === 'seo_desc') {
-        return calculateSeoHealth(b).score - calculateSeoHealth(a).score;
-      }
-      if (adminArticleSort === 'title') {
-        return a.title.localeCompare(b.title);
-      }
-      if (adminArticleSort === 'reading_time') {
-        return (b.reading_time || 3) - (a.reading_time || 3);
-      }
-      if (adminArticleSort === 'infobox') {
-        return (b.infobox?.length || 0) - (a.infobox?.length || 0);
-      }
-      if (adminArticleSort === 'oldest') {
-        return Number(a.id) - Number(b.id);
-      }
-      // 'latest' default
-      return Number(b.id) - Number(a.id);
-    });
-
   const filteredArticles = articles.filter(a => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -813,8 +874,101 @@ export default function App() {
     return true;
   });
 
+  // Signed in and on /admin: the page is the Admin CMS, without the reader site's header and footer.
+  const inAdmin = currentView === 'admin' && Boolean(adminSession);
+
+  const adminNavItems: AdminNavItem<AdminTab>[] = (
+    [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'articles', label: 'Articles', icon: FileText, group: 'Content' },
+      { id: 'media', label: 'Media library', icon: ImageIcon, group: 'Content' },
+      { id: 'categories', label: 'Categories', icon: Layers, count: categories.length, group: 'Content' },
+      { id: 'authors', label: 'Editorial staff', icon: Users, count: authors.length, group: 'Content' },
+      { id: 'gsc', label: 'SEO & Search Console', icon: Activity, group: 'Insights' },
+      { id: 'social', label: 'Social shares', icon: Share2, group: 'Insights' },
+      { id: 'php', label: 'PHP code generator', icon: Code2, group: 'Tools' }
+    ] satisfies AdminNavItem<AdminTab>[]
+  ).filter((item) => canOpenTab(item.id));
+
+  const showAdminNotice = (message: string) => {
+    setAdminExportToast(message);
+    setTimeout(() => setAdminExportToast(null), 4000);
+  };
+
+  // The table and activity feed hold no article bodies, so load the full article first.
+  const openArticleEditorById = async (articleId: number) => {
+    try {
+      const res = await authFetch(`/api/admin/articles/${articleId}`);
+      const body = await parseResponseJson(res);
+      if (!res.ok || !body?.data) {
+        showAdminNotice(res.status === 404 ? 'That article no longer exists.' : body?.message || 'The article could not be opened.');
+        return;
+      }
+      setEditingArticle(body.data);
+      setModalInitialTab('content');
+      setIsArticleModalOpen(true);
+    } catch {
+      showAdminNotice('The article could not be opened. Check your connection.');
+    }
+  };
+
+  const adminHeaderActions = (
+    <>
+      {adminTab === 'articles' && (
+        <div className="hidden md:flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => handleExportArticles('csv')}
+            className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all flex items-center gap-1.5"
+            title="Download the articles catalog as a CSV spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportArticles('json')}
+            className="px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all"
+            title="Download as JSON"
+          >
+            JSON
+          </button>
+        </div>
+      )}
+      {can('settings.manage') && (
+        <button
+          type="button"
+          onClick={handleSyncLiveGreenlight}
+          disabled={isSyncingLive}
+          className="inline-flex items-center justify-center gap-2 h-9 px-2.5 sm:px-3 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-emerald-500/60 transition-colors"
+          title="Pull the latest articles from greenlight.fsia.in"
+        >
+          <RefreshCw className={`w-4 h-4 text-emerald-600 ${isSyncingLive ? 'animate-spin' : ''}`} />
+          <span className="hidden xl:inline">{isSyncingLive ? 'Syncing…' : 'Sync live data'}</span>
+        </button>
+      )}
+      {can('article.create') && (
+        <button
+          type="button"
+          onClick={() => {
+            setEditingArticle(null);
+            setModalInitialTab('content');
+            setIsArticleModalOpen(true);
+          }}
+          className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-sm active:scale-95"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">New article</span>
+        </button>
+      )}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-white">
+      {/* The reader site chrome is hidden inside the signed-in Admin CMS. */}
+      {!inAdmin && (
+      <>
       {/* Top Ticker & Domain Status Bar */}
       <header className="bg-slate-900 text-white text-xs border-b border-slate-800 py-1.5 px-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -1087,7 +1241,8 @@ export default function App() {
         )}
       </nav>
 
-      {/* Top Advert Leaderboard Banner (Official FSIA / Greenlight) */}
+      {/* Top Advert Leaderboard Banner (Official FSIA / Greenlight). Not on the admin sign-in page. */}
+      {currentView !== 'admin' && (
       <AdBanner
         variant="leaderboard"
         customTitle="Forever Star India Awards Season 6 — Grand Conclave Jaipur"
@@ -1095,8 +1250,12 @@ export default function App() {
         customCta="Nominate Online"
         targetUrl="https://greenlight.fsia.in/"
       />
+      )}
+      </>
+      )}
 
       {/* Main Body View Controller */}
+      {!inAdmin || !adminSession ? (
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {/* VIEW 1: PUBLIC HOMEPAGE / SEARCH RESULTS */}
         {currentView === 'public' && (
@@ -1483,747 +1642,83 @@ export default function App() {
             notice={adminLoginNotice}
           />
         )}
-
-        {currentView === 'admin' && adminSession && (
+      </main>
+      ) : (
+        <AdminShell<AdminTab>
+          navItems={adminNavItems}
+          activeId={adminTab}
+          onNavigate={setAdminTab}
+          user={adminSession.user}
+          onSignOut={handleAdminSignOut}
+          onReaderView={() => setCurrentView('public')}
+          isDark={theme.isDark}
+          onToggleTheme={theme.toggle}
+          title={ADMIN_PAGE_TITLES[adminTab].title}
+          subtitle={ADMIN_PAGE_TITLES[adminTab].subtitle}
+          actions={adminHeaderActions}
+        >
           <div className="space-y-6">
-            {/* Admin Header with Easy Guidance & Real-time Live Status */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Live Editorial CMS</span>
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      sc-domain:greenlight.fsia.in
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                      <span>
-                        Signed in as <strong className="font-semibold">{adminSession.user.name}</strong>
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-bold uppercase tracking-wide">
-                        {adminSession.user.role}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleAdminSignOut}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                        title="Sign out of the Admin CMS"
-                      >
-                        <LogOut className="w-3 h-3" />
-                        <span>Sign out</span>
-                      </button>
-                    </span>
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Shield className="w-6 h-6 text-emerald-600 shrink-0" />
-                    <span>Greenlight Editorial & SEO Command Center</span>
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                    Visual publishing suite designed for editors and correspondents. Manage articles, Wikipedia-style infoboxes, homepage taxonomy, and Google Search Console performance.
-                  </p>
+            {/* Export Toast Notification */}
+            {adminExportToast && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>{adminExportToast}</span>
                 </div>
-
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  {/* Export Catalog Menu */}
-                  <div className="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200/60 dark:border-slate-700/60">
-                    <button
-                      type="button"
-                      onClick={() => handleExportArticles('csv')}
-                      className="px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all flex items-center gap-1.5"
-                      title="Download full articles catalog as CSV spreadsheet"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span className="hidden sm:inline">Export CSV</span>
-                      <span className="sm:hidden">CSV</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExportArticles('json')}
-                      className="px-2.5 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-all"
-                      title="Download as JSON"
-                    >
-                      JSON
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSyncLiveGreenlight}
-                    disabled={isSyncingLive}
-                    className="px-3.5 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all flex items-center gap-2 shadow-2xs"
-                    title="Pull latest live articles from greenlight.fsia.in"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncingLive ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingLive ? 'Syncing...' : 'Sync Live Data'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingArticle(null);
-                      setModalInitialTab('content');
-                      setIsArticleModalOpen(true);
-                    }}
-                    className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all flex items-center gap-2 shadow-sm active:scale-95"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Write New Article</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Export Toast Notification */}
-              {adminExportToast && (
-                <div className="mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center justify-between animate-fade-in">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>{adminExportToast}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAdminExportToast(null)}
-                    className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 text-xs"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-
-              {/* Editorial Overview KPI Strip - Light English Color Palette */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-                {/* Metric 1: Articles */}
-                <div 
-                  onClick={() => setAdminTab('articles')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Articles management"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Stories Published</span>
-                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                      <FileText className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {articles.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
-                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      {articles.filter(a => a.status === 'published').length} live
-                    </span>
-                    <span>·</span>
-                    <span className="text-slate-500">{articles.filter(a => a.status !== 'published').length} drafts</span>
-                  </div>
-                </div>
-
-                {/* Metric 2: Categories */}
-                <div 
-                  onClick={() => setAdminTab('categories')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Categories management"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Taxonomy & Sections</span>
-                    <span className="p-1.5 rounded-lg bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300">
-                      <Layers className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {categories.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">100% active</span>
-                    <span>on homepage</span>
-                  </div>
-                </div>
-
-                {/* Metric 3: Authors */}
-                <div 
-                  onClick={() => setAdminTab('authors')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view Editorial Staff"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Newsroom Bylines</span>
-                    <span className="p-1.5 rounded-lg bg-amber-100/70 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
-                      <Users className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif">
-                    {authors.length}
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span>Verified editorial staff</span>
-                  </div>
-                </div>
-
-                {/* Metric 4: SEO Health Score */}
-                <div 
-                  onClick={() => setAdminTab('seo')}
-                  className="cursor-pointer p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 transition-all group"
-                  title="Click to view SEO Health and Audit"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">SEO Health Avg</span>
-                    <span className="p-1.5 rounded-lg bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                      <Activity className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 font-serif flex items-center gap-2">
-                    <span>
-                      {Math.round(articles.reduce((acc, a) => acc + calculateSeoHealth(a).score, 0) / (articles.length || 1))}%
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-sans font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      {articles.filter(a => calculateSeoHealth(a).status === 'green').length}/{articles.length} Healthy
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Meta & OG Image check</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sub-Navigation Tabs - Auto Adjusting for Mobile/Tablet/PC */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl text-xs font-bold gap-1.5 mt-6">
                 <button
                   type="button"
-                  onClick={() => setAdminTab('articles')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'articles'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
+                  onClick={() => setAdminExportToast(null)}
+                  className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 text-xs"
                 >
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Stories ({articles.length})</span>
-                    <span className="hidden sm:inline">Articles & Stories ({articles.length})</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('gsc')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'gsc'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Activity className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">SEO / GSC</span>
-                    <span className="hidden sm:inline">SEO & Search Console</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('social')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'social'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Share2 className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Social CTR</span>
-                    <span className="hidden sm:inline">Social Shares & CTR</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('categories')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'categories'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Layers className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Sections ({categories.length})</span>
-                    <span className="hidden sm:inline">Categories ({categories.length})</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('authors')}
-                  className={`min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'authors'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Users className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">Staff ({authors.length})</span>
-                    <span className="hidden sm:inline">Editorial Staff ({authors.length})</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAdminTab('php')}
-                  className={`col-span-2 sm:col-span-1 min-h-[44px] px-3 sm:px-4 py-2.5 rounded-xl transition-all flex items-center justify-center sm:justify-start gap-2 active:scale-95 ${
-                    adminTab === 'php'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                  }`}
-                >
-                  <Code2 className="w-4 h-4 shrink-0" />
-                  <span className="truncate">
-                    <span className="sm:hidden">PHP Code</span>
-                    <span className="hidden sm:inline">PHP Code Generator</span>
-                  </span>
+                  ✕
                 </button>
               </div>
-            </div>
+            )}
 
-            {/* TAB 1: ARTICLES MANAGEMENT */}
+            {adminTab === 'dashboard' && (
+              <DashboardHome
+                isDark={theme.isDark}
+                refreshKey={articlesVersion}
+                onOpenArticles={(status) => openArticlesTable({ statuses: status ? [status] : [] })}
+                onOpenArticle={openArticleEditorById}
+                userName={adminSession.user.name}
+                onNewArticle={
+                  can('article.create')
+                    ? () => {
+                        setEditingArticle(null);
+                        setModalInitialTab('content');
+                        setIsArticleModalOpen(true);
+                      }
+                    : undefined
+                }
+              />
+            )}
+
+            {/* TAB 1: ARTICLES (server-side table with the Draft → Review → Published workflow) */}
             {adminTab === 'articles' && (
-              <div className="space-y-5">
-                {/* Search & Filter Toolbar for Non-tech Editors */}
-                <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xs">
-                  {/* Search Input */}
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="text"
-                      value={adminArticleSearch}
-                      onChange={(e) => setAdminArticleSearch(e.target.value)}
-                      placeholder="Search articles by title, author, keyword, or slug..."
-                      className="w-full text-xs pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-500 transition-colors"
-                    />
-                    {adminArticleSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+              <ArticlesTable
+                key={articlesTableKey}
+                categories={categories}
+                authors={authors}
+                initialStatuses={articlesTableFilter.statuses}
+                initialAuthorIds={articlesTableFilter.authorIds}
+                refreshKey={articlesVersion}
+                onEdit={openArticleEditorById}
+                onChanged={() => {
+                  setArticlesVersion((v) => v + 1);
+                  loadData();
+                }}
+                onNotice={showAdminNotice}
+              />
+            )}
 
-                  {/* Category & Status Filter with Responsive View Switcher */}
-                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                    <select
-                      value={adminArticleCategoryFilter}
-                      onChange={(e) => setAdminArticleCategoryFilter(e.target.value)}
-                      className="flex-1 sm:flex-initial text-xs px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:border-emerald-500 font-medium"
-                    >
-                      <option value="all">All Categories ({articles.length})</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={c.slug}>{c.name}</option>
-                      ))}
-                    </select>
-
-                    {/* Sort Selector */}
-                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1">
-                      <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <select
-                        value={adminArticleSort}
-                        onChange={(e) => setAdminArticleSort(e.target.value as any)}
-                        className="text-xs bg-transparent text-slate-800 dark:text-slate-200 outline-none font-medium py-1.5 cursor-pointer"
-                        title="Sort articles"
-                      >
-                        <option value="latest">Sort: Latest</option>
-                        <option value="oldest">Sort: Oldest</option>
-                        <option value="title">Sort: Title A-Z</option>
-                        <option value="seo_asc">Sort: SEO Health (Lowest)</option>
-                        <option value="seo_desc">Sort: SEO Health (Highest)</option>
-                        <option value="reading_time">Sort: Longest Read</option>
-                        <option value="infobox">Sort: Most Infobox Facts</option>
-                      </select>
-                    </div>
-
-                    {/* View Switcher (Cards vs Table) */}
-                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleViewMode('cards')}
-                        className={`p-2 rounded-lg text-xs transition-colors flex items-center gap-1 ${
-                          adminArticleViewMode === 'cards'
-                            ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-2xs font-bold'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                        }`}
-                        title="Visual Cards View"
-                      >
-                        <LayoutGrid className="w-4 h-4" />
-                        <span className="hidden sm:inline text-[11px]">Cards</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleViewMode('table')}
-                        className={`p-2 rounded-lg text-xs transition-colors flex items-center gap-1 ${
-                          adminArticleViewMode === 'table'
-                            ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-2xs font-bold'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                        }`}
-                        title="Compact Table View"
-                      >
-                        <List className="w-4 h-4" />
-                        <span className="hidden sm:inline text-[11px]">Table</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Status Filter Pills & SEO Health Filter Pills */}
-                <div className="space-y-2.5 text-xs px-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleStatusFilter('all')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          adminArticleStatusFilter === 'all'
-                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                        }`}
-                      >
-                        All Stories ({articles.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleStatusFilter('published')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                          adminArticleStatusFilter === 'published'
-                            ? 'bg-emerald-600 text-white shadow-2xs font-bold'
-                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/70 border border-emerald-200/50'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        Published ({articles.filter(a => a.status === 'published').length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAdminArticleStatusFilter('draft')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                          adminArticleStatusFilter === 'draft'
-                            ? 'bg-amber-600 text-white shadow-2xs font-bold'
-                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/50'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                        Drafts ({articles.filter(a => a.status !== 'published').length})
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <span>
-                        Showing <strong>{filteredAdminArticles.length}</strong> of {articles.length} articles
-                      </span>
-                      {(adminArticleSearch || adminArticleCategoryFilter !== 'all' || adminArticleStatusFilter !== 'all' || adminArticleSeoFilter !== 'all') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdminArticleSearch('');
-                            setAdminArticleCategoryFilter('all');
-                            setAdminArticleStatusFilter('all');
-                            setAdminArticleSeoFilter('all');
-                          }}
-                          className="text-emerald-600 font-semibold hover:underline"
-                        >
-                          Reset filters
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* SEO Health Quick Filter Bar */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
-                      SEO Health:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAdminArticleSeoFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                        adminArticleSeoFilter === 'all'
-                          ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 shadow-2xs'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      All SEO ({articles.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminArticleSeoFilter('green')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
-                        adminArticleSeoFilter === 'green'
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
-                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200/60 hover:bg-emerald-100/70'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      <span>Healthy ({articles.filter(a => calculateSeoHealth(a).status === 'green').length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminArticleSeoFilter('yellow')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
-                        adminArticleSeoFilter === 'yellow'
-                          ? 'bg-amber-600 text-white border-amber-600 shadow-2xs font-bold'
-                          : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/60 hover:bg-amber-100/70'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                      <span>Needs Review ({articles.filter(a => calculateSeoHealth(a).status === 'yellow').length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAdminArticleSeoFilter('red')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 border ${
-                        adminArticleSeoFilter === 'red'
-                          ? 'bg-rose-600 text-white border-rose-600 shadow-2xs font-bold'
-                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200/60 hover:bg-rose-100/70'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-                      <span>Critical ({articles.filter(a => calculateSeoHealth(a).status === 'red').length})</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* CARDS VIEW */}
-                {adminArticleViewMode === 'cards' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredAdminArticles.map((art) => (
-                      <div
-                        key={art.id}
-                        className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
-                      >
-                        {/* Cover Image & Category Badge */}
-                        <div className="relative aspect-[16/9] bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                          <img
-                            src={art.featured_image}
-                            alt={art.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/70 text-white backdrop-blur-xs">
-                              {art.category_name}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                              art.status === 'published'
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-amber-500 text-white'
-                            }`}>
-                              {art.status}
-                            </span>
-                          </div>
-
-                          {/* SEO Health Indicator Badge (Top Right of Cover) */}
-                          <div className="absolute top-3 right-3 z-10">
-                            <SeoHealthIndicator 
-                              article={art} 
-                              variant="card" 
-                              onQuickFix={handleQuickFixSeo}
-                              onEditSeo={(targetArt) => {
-                                setEditingArticle(targetArt as Article);
-                                setModalInitialTab('seo');
-                                setIsArticleModalOpen(true);
-                              }}
-                            />
-                          </div>
-
-                          {art.infobox && art.infobox.length > 0 && (
-                            <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-slate-950/80 text-emerald-400 backdrop-blur-xs">
-                              {art.infobox.length} Infobox Facts
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Card Body */}
-                        <div className="p-4 flex-1 flex flex-col justify-between">
-                          <div>
-                            <h3 className="text-sm font-bold font-serif text-slate-900 dark:text-slate-100 line-clamp-2 mb-1.5 leading-snug group-hover:text-emerald-600 transition-colors">
-                              {art.title}
-                            </h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-3">
-                              {art.excerpt || 'Editorial feature article published on Greenlight FSIA.'}
-                            </p>
-                          </div>
-
-                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                            <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[130px]">
-                              ✍️ {art.author_name}
-                            </span>
-                            <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                              <span>~{Math.round((art.content || '').split(/\s+/).filter(Boolean).length)} wds</span>
-                              <span>·</span>
-                              <span>{art.reading_time || art.read_time_minutes || 4}m read</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Card Actions Toolbar */}
-                        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleSelectArticle(art.slug)}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-                              title="Preview in public reader"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-slate-500" />
-                              <span>View</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicateArticle(art)}
-                              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center gap-1"
-                              title="Duplicate as new draft template"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Clone</span>
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingArticle(art);
-                                setIsArticleModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1 shadow-2xs"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteArticle(art.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
-                              title="Delete article"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* TABLE VIEW */}
-                {adminArticleViewMode === 'table' && (
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
-                          <tr>
-                            <th className="py-3.5 px-4">Title & Slug</th>
-                            <th className="py-3.5 px-4">Category</th>
-                            <th className="py-3.5 px-4">Author</th>
-                            <th className="py-3.5 px-4">SEO Health Score</th>
-                            <th className="py-3.5 px-4">Infobox Facts</th>
-                            <th className="py-3.5 px-4">Status</th>
-                            <th className="py-3.5 px-4 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {filteredAdminArticles.map((art) => (
-                            <tr key={art.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
-                              <td className="py-3.5 px-4 max-w-sm">
-                                <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
-                                  {art.title}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-mono mt-0.5">
-                                  <span className="truncate max-w-[160px]">/{art.slug}</span>
-                                  <span>·</span>
-                                  <span>~{Math.round((art.content || '').split(/\s+/).filter(Boolean).length)} wds</span>
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 font-medium">
-                                  {art.category_name}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
-                                {art.author_name}
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <SeoHealthIndicator 
-                                  article={art} 
-                                  variant="table" 
-                                  onQuickFix={handleQuickFixSeo}
-                                  onEditSeo={(targetArt) => {
-                                    setEditingArticle(targetArt as Article);
-                                    setModalInitialTab('seo');
-                                    setIsArticleModalOpen(true);
-                                  }} 
-                                />
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono font-bold">
-                                  {art.infobox?.length || 0} fields
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                  art.status === 'published' 
-                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                }`}>
-                                  {art.status}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectArticle(art.slug)}
-                                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                    title="View in reader"
-                                  >
-                                    <ExternalLink className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDuplicateArticle(art)}
-                                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                    title="Clone article"
-                                  >
-                                    <Copy className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingArticle(art);
-                                      setIsArticleModalOpen(true);
-                                    }}
-                                    className="p-1.5 text-slate-400 hover:text-emerald-600"
-                                    title="Edit article"
-                                  >
-                                    <Edit3 className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteArticle(art.id)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600"
-                                    title="Delete article"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* MEDIA LIBRARY */}
+            {adminTab === 'media' && (
+              <MediaLibrary
+                canUpload={can('media.upload')}
+                canDelete={can('article.edit.any')}
+                onNotice={showAdminNotice}
+              />
             )}
 
             {/* TAB 2: GOOGLE SEARCH CONSOLE ANALYTICS & RANK DROPS */}
@@ -2247,6 +1742,7 @@ export default function App() {
                         {gscSyncMessage}
                       </span>
                     )}
+                    {can('settings.manage') && (
                     <button
                       type="button"
                       onClick={handleTriggerGscSync}
@@ -2256,6 +1752,7 @@ export default function App() {
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncingGsc ? 'animate-spin' : ''}`} />
                       <span>{isSyncingGsc ? 'Syncing...' : 'Sync Search Console'}</span>
                     </button>
+                    )}
                   </div>
                 </div>
 
@@ -2605,8 +2102,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              setAdminArticleSearch(auth.name);
-                              setAdminTab('articles');
+                              openArticlesTable({ authorIds: [auth.id] });
                             }}
                             className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
                             title={`Filter articles written by ${auth.name}`}
@@ -2635,8 +2131,8 @@ export default function App() {
               />
             )}
           </div>
-        )}
-      </main>
+        </AdminShell>
+      )}
 
       {/* Admin Article Modal */}
       <AdminArticleModal
@@ -2651,6 +2147,9 @@ export default function App() {
         categories={categories}
         authors={authors}
         initialTab={modalInitialTab}
+        canPublish={can('article.publish')}
+        canUploadMedia={can('media.upload')}
+        ownName={adminSession?.user.name}
       />
 
       {/* Public Multi-Platform Share Modal */}
@@ -2832,6 +2331,8 @@ export default function App() {
       )}
 
       {/* Footer */}
+      {!inAdmin && (
+      <>
       <footer className="mt-20 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-10 px-4 sm:px-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
@@ -2857,7 +2358,8 @@ export default function App() {
           </div>
         </div>
       </footer>
-      {/* Bottom Sticky Sponsor Bar */}
+      {/* Bottom Sticky Sponsor Bar. Not on the admin sign-in page. */}
+      {currentView !== 'admin' && (
       <AdBanner
         variant="bottom-sticky"
         customTitle="FSIA Season 6 Conclave Jaipur — National Nominations Open"
@@ -2865,6 +2367,9 @@ export default function App() {
         customCta="Apply Now"
         targetUrl="https://greenlight.fsia.in/"
       />
+      )}
+      </>
+      )}
     </div>
   );
 }

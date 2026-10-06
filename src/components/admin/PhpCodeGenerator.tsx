@@ -928,7 +928,7 @@ try {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href="/new_database.sql"
+                  href={`data:application/sql;charset=utf-8,${encodeURIComponent(NEW_DATABASE_SQL)}`}
                   download="new_database.sql"
                   className="px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-xl flex items-center gap-1.5 transition-colors border border-emerald-200 dark:border-emerald-800"
                 >

@@ -1,15 +1,20 @@
 /**
  * Admin API Routes
- * Protected endpoints with authenticateToken and RBAC authorizeRole middlewares
+ * Every endpoint needs a signed-in user; each route then names the permission
+ * it needs (see backend/src/modules/auth/permissions.js).
  */
 
-import { Router } from 'express';
-import { authenticateToken, authorizeRole } from '../middlewares/authMiddleware.js';
+import express, { Router } from 'express';
+import { authenticateToken } from '../middlewares/authMiddleware.js';
+import { requirePermission } from '../modules/auth/permissions.js';
 import { authLimiter } from '../config/security.js';
 import * as articleController from '../controllers/admin/articleController.js';
 import * as categoryController from '../controllers/admin/categoryController.js';
 import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
+import * as dashboardController from '../controllers/admin/dashboardController.js';
+import * as mediaController from '../controllers/admin/mediaController.js';
+import { MAX_UPLOAD_BYTES } from '../modules/media/mediaStore.js';
 
 const router = Router();
 
@@ -19,48 +24,70 @@ router.use(authLimiter);
 // Protect all admin endpoints with authentication
 router.use(authenticateToken);
 
+// Any CMS role: reading articles, categories and authors, and SEO suggestions.
+const staff = requirePermission('article.create', 'article.edit.any');
+
 /* ==========================================================================
-   Article Management (Admin, Editor, Author)
+   Dashboard: headline numbers, 30-day traffic and recent activity
    ========================================================================== */
-router.get('/articles', authorizeRole('author'), articleController.getAllArticles);
-router.get('/articles/:id', authorizeRole('author'), articleController.getArticleById);
-router.post('/articles', authorizeRole('author'), articleController.createArticle);
-router.put('/articles/:id', authorizeRole('editor'), articleController.updateArticle);
-router.delete('/articles/:id', authorizeRole('admin'), articleController.deleteArticle);
-router.post('/articles/:id/quick-fix-seo', authorizeRole('author'), articleController.quickFixSeo);
-router.post('/seo/quick-fix', authorizeRole('author'), articleController.quickFixSeo);
+router.get('/dashboard', staff, dashboardController.getDashboard);
+
+/* ==========================================================================
+   Article Management (who may edit or publish what: modules/auth/articlePolicy.js)
+   ========================================================================== */
+router.get('/articles', staff, articleController.getAllArticles);
+router.get('/articles/:id', staff, articleController.getArticleById);
+router.post('/articles', requirePermission('article.create'), articleController.createArticle);
+router.put('/articles/:id', requirePermission('article.edit.own', 'article.edit.any'), articleController.updateArticle);
+router.delete('/articles/:id', requirePermission('article.delete'), articleController.deleteArticle);
+router.post('/articles/:id/quick-fix-seo', staff, articleController.quickFixSeo);
+router.post('/seo/quick-fix', staff, articleController.quickFixSeo);
+
+/* ==========================================================================
+   Media Library (uploads are the raw image body; see mediaController.js)
+   ========================================================================== */
+router.get('/media', staff, mediaController.getMedia);
+router.post(
+  '/media',
+  requirePermission('media.upload'),
+  // Accept any Content-Type here: the controller checks the bytes themselves.
+  express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES + 1024 }),
+  mediaController.uploadMedia
+);
+router.patch('/media/:id', requirePermission('media.upload'), mediaController.patchMedia);
+router.delete('/media/:id', requirePermission('article.edit.any'), mediaController.removeMedia);
 
 /* ==========================================================================
    Category Management & Homepage Reordering (Editor, Admin)
    ========================================================================== */
-router.get('/categories', authorizeRole('author'), categoryController.getAllCategories);
-router.post('/categories', authorizeRole('editor'), categoryController.createCategory);
-router.put('/categories/reorder', authorizeRole('editor'), categoryController.reorderCategories);
-router.put('/categories/:id', authorizeRole('editor'), categoryController.updateCategory);
-router.delete('/categories/:id', authorizeRole('admin'), categoryController.deleteCategory);
+router.get('/categories', staff, categoryController.getAllCategories);
+router.post('/categories', requirePermission('category.manage'), categoryController.createCategory);
+router.put('/categories/reorder', requirePermission('category.manage'), categoryController.reorderCategories);
+router.put('/categories/:id', requirePermission('category.manage'), categoryController.updateCategory);
+router.delete('/categories/:id', requirePermission('category.delete'), categoryController.deleteCategory);
 
 /* ==========================================================================
    Author Management (Admin only)
    ========================================================================== */
-router.get('/authors', authorizeRole('author'), authorController.getAllAuthors);
-router.get('/authors/:id', authorizeRole('author'), authorController.getAuthorById);
-router.post('/authors', authorizeRole('admin'), authorController.createAuthor);
-router.put('/authors/:id', authorizeRole('admin'), authorController.updateAuthor);
-router.delete('/authors/:id', authorizeRole('admin'), authorController.deleteAuthor);
+router.get('/authors', staff, authorController.getAllAuthors);
+router.get('/authors/:id', staff, authorController.getAuthorById);
+router.post('/authors', requirePermission('author.manage'), authorController.createAuthor);
+router.put('/authors/:id', requirePermission('author.manage'), authorController.updateAuthor);
+router.delete('/authors/:id', requirePermission('author.manage'), authorController.deleteAuthor);
 
 /* ==========================================================================
    Google Search Console (GSC) Analytics & Rank Drops (Editor, Admin)
    ========================================================================== */
-router.get('/gsc/performance', authorizeRole('editor'), gscController.getPerformanceOverview);
-router.get('/gsc/rank-drops', authorizeRole('editor'), gscController.getRankDrops);
-router.get('/gsc/status', authorizeRole('admin'), gscController.getSchedulerStatus);
-router.post('/gsc/sync', authorizeRole('admin'), gscController.triggerSync);
-router.post('/gsc/content-audit', authorizeRole('editor'), gscController.runContentAudit);
+router.get('/gsc/performance', requirePermission('analytics.view'), gscController.getPerformanceOverview);
+router.get('/gsc/rank-drops', requirePermission('analytics.view'), gscController.getRankDrops);
+router.get('/gsc/status', requirePermission('settings.manage'), gscController.getSchedulerStatus);
+router.post('/gsc/sync', requirePermission('settings.manage'), gscController.triggerSync);
+router.post('/gsc/content-audit', requirePermission('analytics.view'), gscController.runContentAudit);
 
 /* ==========================================================================
    Live Greenlight.fsia.in Data Synchronizer
    ========================================================================== */
-router.post('/greenlight/sync', authorizeRole('author'), async (req, res) => {
+router.post('/greenlight/sync', requirePermission('settings.manage'), async (req, res) => {
   try {
     const { syncGreenlightLive } = await import('../services/greenlightSyncService.js');
     const result = await syncGreenlightLive();

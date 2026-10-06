@@ -10,8 +10,9 @@ import * as articleController from '../controllers/admin/articleController.js';
 import * as categoryController from '../controllers/admin/categoryController.js';
 import * as authorController from '../controllers/admin/authorController.js';
 import * as gscController from '../controllers/admin/gscDashboardController.js';
-import { generateToken } from '../middlewares/authMiddleware.js';
-import { memoryStore } from '../config/database.js';
+import authRoutes from './authRoutes.js';
+import { authenticateToken, authorizeRole } from '../middlewares/authMiddleware.js';
+import { authLimiter } from '../config/security.js';
 
 const router = Router();
 
@@ -26,51 +27,25 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Demo/Authentication Token Issuer for CMS Users
-router.post('/auth/login', (req, res) => {
-  const { email, role = 'admin' } = req.body;
-  const author = memoryStore.authors.find(a => a.email.toLowerCase() === (email || '').toLowerCase()) || {
-    id: 1,
-    name: 'Super Admin',
-    email: email || 'admin@greenlight.fsia.in',
-    role: role || 'admin'
-  };
+// CMS sign-in (POST /api/auth/login) and session check (GET /api/auth/me)
+router.use('/auth', authRoutes);
 
-  const token = generateToken({
-    id: author.id,
-    name: author.name,
-    email: author.email,
-    role: role || author.role
-  });
+// Direct root resource aliases (supporting both /api/articles and /api/admin/articles).
+// They carry the same sign-in and role checks as their /api/admin counterparts.
+const signedIn = [authLimiter, authenticateToken];
+router.get('/articles', signedIn, authorizeRole('author'), articleController.getAllArticles);
+router.post('/articles', signedIn, authorizeRole('author'), articleController.createArticle);
+router.get('/articles/:id', signedIn, authorizeRole('author'), articleController.getArticleById);
+router.put('/articles/:id', signedIn, authorizeRole('editor'), articleController.updateArticle);
+router.delete('/articles/:id', signedIn, authorizeRole('admin'), articleController.deleteArticle);
+router.post('/articles/:id/quick-fix-seo', signedIn, authorizeRole('author'), articleController.quickFixSeo);
+router.post('/seo/quick-fix', signedIn, authorizeRole('author'), articleController.quickFixSeo);
+router.post('/gsc/content-audit', signedIn, authorizeRole('editor'), gscController.runContentAudit);
+router.get('/gsc/performance', signedIn, authorizeRole('editor'), gscController.getPerformanceOverview);
+router.get('/gsc/rank-drops', signedIn, authorizeRole('editor'), gscController.getRankDrops);
 
-  return res.status(200).json({
-    success: true,
-    message: 'Authentication successful',
-    token,
-    user: {
-      id: author.id,
-      name: author.name,
-      email: author.email,
-      role: role || author.role,
-      avatar_url: author.avatar_url
-    }
-  });
-});
-
-// Direct root resource aliases (supporting both /api/articles and /api/admin/articles)
-router.get('/articles', articleController.getAllArticles);
-router.post('/articles', articleController.createArticle);
-router.get('/articles/:id', articleController.getArticleById);
-router.put('/articles/:id', articleController.updateArticle);
-router.delete('/articles/:id', articleController.deleteArticle);
-router.post('/articles/:id/quick-fix-seo', articleController.quickFixSeo);
-router.post('/seo/quick-fix', articleController.quickFixSeo);
-router.post('/gsc/content-audit', gscController.runContentAudit);
-router.get('/gsc/performance', gscController.getPerformanceOverview);
-router.get('/gsc/rank-drops', gscController.getRankDrops);
-
-router.get('/categories', categoryController.getAllCategories);
-router.get('/authors', authorController.getAllAuthors);
+router.get('/categories', signedIn, authorizeRole('author'), categoryController.getAllCategories);
+router.get('/authors', signedIn, authorizeRole('author'), authorController.getAllAuthors);
 
 // Route groups
 router.use('/public', publicRoutes);

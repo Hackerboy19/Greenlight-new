@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { authFetch } from '../../utils/adminAuth';
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -61,11 +62,10 @@ export const SeoHealthIndicator: React.FC<SeoHealthIndicatorProps> = ({
     setFixSuccess(false);
 
     try {
-      const response = await fetch('/api/seo/quick-fix', {
+      const response = await authFetch('/api/admin/seo/quick-fix', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'admin'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           article: {

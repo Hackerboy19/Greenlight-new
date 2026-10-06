@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { authFetch } from '../../utils/adminAuth';
 import {
   Sparkles,
   TrendingUp,
@@ -74,11 +75,10 @@ export const AiContentAuditPanel: React.FC<AiContentAuditPanelProps> = ({
         };
       }).sort((a, b) => b.ctr - a.ctr).slice(0, 10);
 
-      const res = await fetch('/api/gsc/content-audit', {
+      const res = await authFetch('/api/admin/gsc/content-audit', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-test-role': 'editor'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ articles: preparedCandidates })
       });
@@ -123,11 +123,10 @@ export const AiContentAuditPanel: React.FC<AiContentAuditPanelProps> = ({
         await onApplyHeadline(rec.articleId, chosenHeadline);
       } else {
         // Fallback direct PUT request
-        await fetch(`/api/articles/${rec.articleId}`, {
+        await authFetch(`/api/admin/articles/${rec.articleId}`, {
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
-            'x-test-role': 'editor'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             title: chosenHeadline,
